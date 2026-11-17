@@ -1,0 +1,21 @@
+# Define los prompts que se van a evaluar
+prompts:
+  - "¿Cuál es la capital de Francia?"
+
+# Define los proveedores que se van a usar (DeepSeek)
+providers:
+  - id: openai:chat:deepseek-chat
+    config:
+      # URL base de DeepSeek (debe incluir /v1 para el formato OpenAI)
+      apiBaseUrl: https://api.deepseek.com/v1
+      # 🆕 CRÍTICO: Le dice a Promptfoo que lea TU variable de entorno
+      apiKeyEnvar: DEEPSEEK_API_KEY
+
+# Define los tests (casos de prueba)
+tests:
+  - vars:
+      expected: "París"
+    assert:
+      # Verifica que la respuesta contenga "París"
+      - type: contains
+        value: "París"

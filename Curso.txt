@@ -1,0 +1,184 @@
+Curso: AI Quality Engineering — Del Prompt al Pipeline
+
+REQUISITO PREVIO:
+- Node.js 20+ instalado.
+- Docker Desktop abierto (lo usaremos en módulos posteriores).
+- Una API Key de DeepSeek con saldo (mínimo $1 USD). La conseguiste en el curso anterior.
+- Ganas de romper paradigmas: ya no vas a testear código, vas a testear IA.
+
+ESTRUCTURA DE ARCHIVOS QUE VAMOS A CREAR:
+- ai-quality-engineering/                    (NUEVA carpeta del curso)
+- ai-quality-engineering/package.json        (NUEVO, generado por npm init)
+- ai-quality-engineering/tsconfig.json       (NUEVO)
+- ai-quality-engineering/.env                (NUEVO, con la ruta al archivo secreto)
+- ai-quality-engineering/.gitignore          (NUEVO)
+- ai-quality-engineering/src/utils/env.ts    (NUEVO, carga la API Key)
+- ai-quality-engineering/src/utils/deepevalConfig.ts (NUEVO, cliente de DeepSeek)
+- ai-quality-engineering/tests/evals/primerTest.eval.ts (NUEVO, primer test)
+- ~/.secrets/deepseek-key                    (NUEVO, fuera del repo, con la API Key)
+
+
+`expect(response).toBe('París')`
+
+
+✅ Laboratorio de AI Quality Engineering
+✅ Configuración segura de la API Key (sin exponerla en el repo)
+✅ Primer test de evaluación con DeepEval
+✅ Reporte de "Pass/Fail" objetivo (igual que Playwright)
+
+
+# PARTE 1: CONFIGURACIÓN DEL LABORATORIO
+
+
+# Inicializa un proyecto de Node.js con valores por defecto
+npm init -y
+
+# Verifica que se creó el package.json
+cat package.json
+
+
+# Instala TypeScript, los tipos de Node y la herramienta para ejecutar archivos .ts
+npm install -D typescript @types/node tsx
+
+# Verifica que se instalaron
+npx tsc --version
+npx tsx --version
+
+# Crea el archivo tsconfig.json
+nano tsconfig.json
+
+
+# Crea las carpetas donde vivirá el código
+mkdir -p src/evaluators src/agents src/utils tests/evals
+
+# Verifica que se crearon
+ls -R src tests
+
+
+# Instala DeepEval como dependencia de desarrollo
+npm install -D deepeval
+
+# Verifica que se instaló
+npm list deepeval
+
+# Crea la carpeta .secrets en tu home (solo la primera vez)
+mkdir -p ~/.secrets
+
+# Crea el archivo con tu API Key (sin comillas, sin saltos de línea extra)
+nano ~/.secrets/deepseek-key
+
+
+# Protege el archivo para que solo tú puedas leerlo
+chmod 600 ~/.secrets/deepseek-key
+
+# Verifica los permisos
+ls -la ~/.secrets/deepseek-key
+
+
+# Instala dotenv (para cargar variables de entorno desde .env)
+npm install -D dotenv
+
+# Crea el archivo .env (este SÍ va a Git, pero sin la key)
+nano .env
+
+# Crea el archivo de configuración de entorno
+nano src/utils/env.ts
+
+
+# Crea el archivo de configuración de DeepEval
+nano src/utils/deepevalConfig.ts
+
+
+# Instala el SDK de OpenAI (compatible con DeepSeek)
+npm install openai
+
+# Verifica que se instaló
+npm list openai
+
+
+# Crea el archivo del test
+nano tests/evals/primerTest.eval.ts
+
+
+# Instala Vitest
+npm install -D vitest
+
+# Verifica que se instaló
+npx vitest --version
+
+
+# Ejecuta el test con Vitest
+# La API Key se carga automáticamente desde ~/.secrets/deepseek-key
+npx vitest run tests/evals/primerTest.eval.ts
+
+
+npx vitest run tests/evals/primerTest.test.ts
+
+
+
+# Configura DeepSeek como el proveedor de LLM por defecto
+npx deepeval set-deepseek --model deepseek-chat
+
+# Verifica que se configuró
+npx deepeval diagnose
+
+
+# Instala Promptfoo globalmente
+npm install -g promptfoo
+
+# Verifica que se instaló
+promptfoo --version
+
+
+
+# Exporta la API Key (si no está en el entorno)
+export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key)
+
+# Ejecuta la evaluación
+promptfoo eval
+
+
+
+
+
+# Asegúrate de que la variable está exportada en esta terminal
+export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key | tr -d '\n')
+
+# Ejecuta Promptfoo
+promptfoo eval
+
+
+
+
+
+
+# Desinstala DeepEval
+npm uninstall deepeval
+
+# Elimina el archivo de configuración de DeepEval (ya no se usa)
+rm -f src/utils/deepevalConfig.ts
+
+# Elimina el test de DeepEval (lo reemplazamos con Promptfoo)
+rm -f tests/evals/primerTest.test.ts
+
+# Verifica que ya no existe
+ls src/utils/ tests/evals/
+
+
+
+📋 CHECKLIST FINAL DEL MÓDULO 1
+Verificación	                                  Estado
+Carpeta ai-quality-engineering creada	            ✅
+package.json inicializado	                        ✅
+TypeScript + tsx + @types/node instalados	        ✅
+tsconfig.json creado con aliases	                ✅
+Carpetas src/ y tests/ creadas	                    ✅
+~/.secrets/deepseek-key con la API Key	            ✅
+.env con DEEPSEEK_API_KEY_FILE	                    ✅
+src/utils/env.ts cargando la key	                ✅
+Promptfoo instalado	                                ✅
+promptfooconfig.yaml configurado con apiKeyEnvar	✅
+promptfoo eval ejecutado y aprobado (100%)	        ✅
+.gitignore protegiendo .env	                        ✅
+Git inicializado con primer commit	                ✅
+DeepEval eliminado (limpieza)	                    ⏳
