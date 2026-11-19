@@ -1,0 +1,3 @@
+Eres un asistente de QA. Responde la siguiente pregunta del usuario de forma clara y concisa:
+
+{{question}}

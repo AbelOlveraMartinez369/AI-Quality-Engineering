@@ -1,8 +1,18 @@
-Curso: AI Quality Engineering — Del Prompt al Pipeline
+AI QUALITY ENGINEERING - DEL PROMPT AL PIPELINE
+
+MODULO 1 El Manifiesto del AI Quality Engineer (Setup y Primer Test)
+
+
+Abel, aquí tienes el **Módulo 1 completo y definitivo**, con todas las correcciones aplicadas (Promptfoo en lugar de DeepEval, manejo seguro de la API Key, y los comandos exactos que funcionaron). Listo para copiar y pegar en tu archivo maestro.
+
+---
+
+```markdown
+# MÓDULO 1 — El Manifiesto del AI Quality Engineer (Setup y Primer Test)
+## Curso: AI Quality Engineering — Del Prompt al Pipeline
 
 REQUISITO PREVIO:
 - Node.js 20+ instalado.
-- Docker Desktop abierto (lo usaremos en módulos posteriores).
 - Una API Key de DeepSeek con saldo (mínimo $1 USD). La conseguiste en el curso anterior.
 - Ganas de romper paradigmas: ya no vas a testear código, vas a testear IA.
 
@@ -11,174 +21,601 @@ ESTRUCTURA DE ARCHIVOS QUE VAMOS A CREAR:
 - ai-quality-engineering/package.json        (NUEVO, generado por npm init)
 - ai-quality-engineering/tsconfig.json       (NUEVO)
 - ai-quality-engineering/.env                (NUEVO, con la ruta al archivo secreto)
+- ai-quality-engineering/.env.example        (NUEVO, plantilla para otros devs)
 - ai-quality-engineering/.gitignore          (NUEVO)
 - ai-quality-engineering/src/utils/env.ts    (NUEVO, carga la API Key)
-- ai-quality-engineering/src/utils/deepevalConfig.ts (NUEVO, cliente de DeepSeek)
-- ai-quality-engineering/tests/evals/primerTest.eval.ts (NUEVO, primer test)
+- ai-quality-engineering/promptfooconfig.yaml (NUEVO, configuración de Promptfoo)
 - ~/.secrets/deepseek-key                    (NUEVO, fuera del repo, con la API Key)
 
 
-`expect(response).toBe('París')`
+# VIDEO 1 (Módulo 1) — El Manifiesto del AI Quality Engineer
+## Módulo 1: Setup y Primer Test
 
+---
 
+### [INTRO]
+
+> **"Chicos, bienvenidos al curso que las empresas están buscando y nadie está dando. Ya saben hacer tests de Playwright que pasan o fallan. Pero, ¿qué hacen cuando el sistema es una IA y la misma entrada da diez salidas diferentes?"**
+
+> **"En este curso van a construir el framework de calidad para la era de la IA. No van a ser 'usuarios de ChatGPT'. Van a ser los ingenieros que auditan, evalúan y ponen límites a los agentes. Van a aprender a hacer que un pipeline de CI/CD rechace un modelo que alucina. Eso es lo que separa a un QA de un AI Quality Engineer."**
+
+> **"Todo lo que usaremos es open-source y gratuito. El único costo es el 'juez' de la IA, que ya tienen de DeepSeek y cuesta centavos. Empezamos."**
+
+---
+
+### [POR QUÉ ESTE CURSO ES DIFERENTE]
+
+No es un curso de "usar ChatGPT para escribir tests". Eso ya lo hicimos en el curso anterior.
+
+Este es un curso de **ingeniería de confianza**:
+- **Testing determinista:** Playwright (lo que ya sabes).
+- **Testing probabilístico:** LLMs (lo que vas a aprender).
+- **El problema:** Un LLM puede dar una respuesta diferente cada vez que le preguntas lo mismo. No puedes usar `expect(response).toBe('París')` porque mañana podría decir "París, Francia" o "La capital es París".
+- **La solución:** Los **evals** (evaluaciones), que son tests que verifican la calidad de la respuesta con un Pass/Fail objetivo.
+
+---
+
+### [QUÉ VAMOS A CONSTRUIR EN ESTE MÓDULO]
+
+```
 ✅ Laboratorio de AI Quality Engineering
 ✅ Configuración segura de la API Key (sin exponerla en el repo)
-✅ Primer test de evaluación con DeepEval
+✅ Primer test de evaluación con Promptfoo
 ✅ Reporte de "Pass/Fail" objetivo (igual que Playwright)
+```
 
+---
 
 # PARTE 1: CONFIGURACIÓN DEL LABORATORIO
 
+---
 
+### 🆕 PASO 1: Crear la carpeta del nuevo curso
+
+> **"Abel, no mezcles este curso con el anterior. Crea una carpeta nueva. En la terminal:"**
+
+```bash
+# Ve a tu carpeta de desarrollo (o donde quieras crear el curso)
+cd /Volumes/KINGSTON/Development
+
+# Crea la carpeta del nuevo curso
+mkdir ai-quality-engineering
+
+# Entra a la carpeta
+cd ai-quality-engineering
+
+# Verifica que estás dentro
+pwd
+```
+
+Debe imprimir:
+```
+/Volumes/KINGSTON/Development/ai-quality-engineering
+```
+
+---
+
+### 🆕 PASO 2: Inicializar el proyecto de Node.js
+
+```bash
 # Inicializa un proyecto de Node.js con valores por defecto
 npm init -y
 
 # Verifica que se creó el package.json
 cat package.json
+```
 
+---
 
+### 🆕 PASO 3: Instalar TypeScript y las dependencias base
+
+```bash
 # Instala TypeScript, los tipos de Node y la herramienta para ejecutar archivos .ts
 npm install -D typescript @types/node tsx
 
 # Verifica que se instalaron
 npx tsc --version
 npx tsx --version
+```
 
+Debe imprimir las versiones (ej. `Version 5.x.x` y `tsx v4.x.x`).
+
+---
+
+### 🆕 PASO 4: Crear el archivo de configuración de TypeScript (`tsconfig.json`)
+
+```bash
 # Crea el archivo tsconfig.json
 nano tsconfig.json
+```
 
+Pega esto **exactamente**:
 
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@utils/*": ["./src/utils/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}
+```
+
+**Explicación línea por línea:**
+
+- `"target": "ES2022"`: Compila a JavaScript moderno (Node 20+ lo soporta).
+- `"module": "commonjs"`: Usa el sistema de módulos clásico de Node.
+- `"strict": true`: Activa todas las validaciones estrictas de TypeScript (evita bugs).
+- `"esModuleInterop": true`: Permite importar librerías que no son nativas de TypeScript sin problemas.
+- `"skipLibCheck": true`: No revisa los tipos de las librerías externas (más rápido).
+- `"forceConsistentCasingInFileNames": true`: Evita errores en mayúsculas/minúsculas en nombres de archivo.
+- `"types": ["node"]`: Carga los tipos de Node.js (para usar `process`, `fs`, etc.).
+- `"baseUrl": "."`: La raíz del proyecto para las rutas.
+- `"paths"`: Crea atajos para importar archivos sin escribir rutas largas.
+- `"include"`: Le dice a TypeScript que solo compile los archivos dentro de `src/` y `tests/`.
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+---
+
+### 🆕 PASO 5: Crear la estructura de carpetas
+
+```bash
 # Crea las carpetas donde vivirá el código
-mkdir -p src/evaluators src/agents src/utils tests/evals
+mkdir -p src/utils tests/evals
 
 # Verifica que se crearon
 ls -R src tests
+```
 
+Debes ver algo como:
+```
+src:
+utils
+tests:
+evals
+```
 
-# Instala DeepEval como dependencia de desarrollo
-npm install -D deepeval
+---
 
-# Verifica que se instaló
-npm list deepeval
+### 🆕 PASO 6: Crear el archivo secreto con la API Key (FUERA del repo)
 
+> **"Chicos, esto es CRÍTICO. Nunca, pero nunca, pongan su API Key en el código. Si suben el repo a GitHub público, cualquiera puede robarla y gastar sus tokens. La solución es guardarla en un archivo FUERA del repositorio."**
+
+```bash
 # Crea la carpeta .secrets en tu home (solo la primera vez)
 mkdir -p ~/.secrets
 
 # Crea el archivo con tu API Key (sin comillas, sin saltos de línea extra)
 nano ~/.secrets/deepseek-key
+```
 
+Pega **solo tu API Key** (empieza con `sk-...`):
+```
+sk-tu-api-key-real-aqui
+```
 
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+```bash
 # Protege el archivo para que solo tú puedas leerlo
 chmod 600 ~/.secrets/deepseek-key
 
 # Verifica los permisos
 ls -la ~/.secrets/deepseek-key
+```
 
+Debe mostrar `-rw-------`.
 
+---
+
+### 🆕 PASO 7: Instalar `dotenv` y crear el archivo `.env` (SIN la key)
+
+```bash
 # Instala dotenv (para cargar variables de entorno desde .env)
 npm install -D dotenv
 
 # Crea el archivo .env (este SÍ va a Git, pero sin la key)
 nano .env
+```
 
+Pega esto (reemplaza con tu ruta real si es diferente):
+
+```
+# Ruta al archivo que contiene la API Key (fuera del repo)
+DEEPSEEK_API_KEY_FILE=/Users/abelolveramartinez/.secrets/deepseek-key
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+---
+
+### 🆕 PASO 8: Crear el archivo `src/utils/env.ts` (carga la key desde el archivo secreto)
+
+```bash
 # Crea el archivo de configuración de entorno
 nano src/utils/env.ts
+```
 
+Pega esto:
 
-# Crea el archivo de configuración de DeepEval
-nano src/utils/deepevalConfig.ts
+```typescript
+// Importa el módulo fs para leer archivos del sistema
+import fs from 'fs';
+// Importa dotenv para cargar las variables del archivo .env
+import dotenv from 'dotenv';
 
+// Carga las variables de entorno desde el archivo .env
+dotenv.config();
 
-# Instala el SDK de OpenAI (compatible con DeepSeek)
-npm install openai
+// Lee la ruta del archivo que contiene la API Key desde el .env
+const apiKeyFile = process.env.DEEPSEEK_API_KEY_FILE;
 
-# Verifica que se instaló
-npm list openai
+// Verifica que la variable exista
+if (!apiKeyFile) {
+  // Si no existe, lanza un error claro
+  throw new Error('Falta DEEPSEEK_API_KEY_FILE en el archivo .env');
+}
 
+// Resuelve la ruta absoluta del archivo (reemplaza ~ por el home del usuario)
+const resolvedPath = apiKeyFile.replace('~', process.env.HOME || '');
 
-# Crea el archivo del test
-nano tests/evals/primerTest.eval.ts
+// Lee el contenido del archivo y lo pone en process.env.DEEPSEEK_API_KEY
+process.env.DEEPSEEK_API_KEY = fs.readFileSync(resolvedPath, 'utf-8').trim();
+```
 
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
 
-# Instala Vitest
-npm install -D vitest
+---
 
-# Verifica que se instaló
-npx vitest --version
+### 🆕 PASO 9: Instalar Promptfoo (el framework de evaluación)
 
-
-# Ejecuta el test con Vitest
-# La API Key se carga automáticamente desde ~/.secrets/deepseek-key
-npx vitest run tests/evals/primerTest.eval.ts
-
-
-npx vitest run tests/evals/primerTest.test.ts
-
-
-
-# Configura DeepSeek como el proveedor de LLM por defecto
-npx deepeval set-deepseek --model deepseek-chat
-
-# Verifica que se configuró
-npx deepeval diagnose
-
-
+```bash
 # Instala Promptfoo globalmente
 npm install -g promptfoo
 
 # Verifica que se instaló
 promptfoo --version
+```
 
+Debe imprimir la versión (ej. `0.x.x`).
 
+---
 
+### 🆕 PASO 10: Crear el archivo de configuración de Promptfoo (`promptfooconfig.yaml`)
+
+```bash
+# Crea el archivo de configuración
+nano promptfooconfig.yaml
+```
+
+Pega esto:
+
+```yaml
+# Define los prompts que se van a evaluar
+prompts:
+  - "¿Cuál es la capital de Francia?"
+
+# Define los proveedores que se van a usar (DeepSeek)
+providers:
+  - id: openai:chat:deepseek-chat
+    config:
+      # URL base de DeepSeek (debe incluir /v1 para el formato OpenAI)
+      apiBaseUrl: https://api.deepseek.com/v1
+      # Le dice a Promptfoo que lea TU variable de entorno
+      apiKeyEnvar: DEEPSEEK_API_KEY
+
+# Define los tests (casos de prueba)
+tests:
+  - vars:
+      expected: "París"
+    assert:
+      # Verifica que la respuesta contenga "París"
+      - type: contains
+        value: "París"
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+**Explicación línea por línea:**
+
+- `prompts`: La pregunta que se le hará al modelo.
+- `providers`: La configuración de DeepSeek. `apiBaseUrl` debe incluir `/v1` para el formato OpenAI. `apiKeyEnvar` le dice a Promptfoo que busque la API Key en la variable `DEEPSEEK_API_KEY` (no en `OPENAI_API_KEY`).
+- `tests`: El caso de prueba. `vars.expected` es la respuesta esperada. `assert` verifica que la respuesta contenga "París".
+
+---
+
+### 🆕 PASO 11: Crear el `.gitignore` con `nano` (no con `echo`)
+
+> **"Chicos, en macOS, el comando `echo` con `!` falla porque zsh lo interpreta como búsqueda en el historial. Por eso usamos `nano` para crear el `.gitignore`."**
+
+```bash
+nano .gitignore
+```
+
+Pega esto **exactamente**:
+
+```
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+test-results/
+playwright-report/
+allure-results/
+allure-report/
+.deepeval/
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+Verifica:
+
+```bash
+cat .gitignore
+```
+
+Debe mostrar:
+```
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+test-results/
+playwright-report/
+allure-results/
+allure-report/
+.deepeval/
+```
+
+---
+
+### 🆕 PASO 12: Crear el `.env.example` (plantilla para otros devs)
+
+```bash
+nano .env.example
+```
+
+Pega esto:
+
+```
+# Ruta al archivo que contiene la API Key (fuera del repo)
+DEEPSEEK_API_KEY_FILE=/ruta/a/tu/archivo/secreto/deepseek-key
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+---
+
+# PARTE 2: EL PRIMER TEST DE EVALUACIÓN
+
+---
+
+### 🆕 PASO 13: Ejecutar el primer test de evaluación con Promptfoo
+
+```bash
 # Exporta la API Key (si no está en el entorno)
-export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key)
+export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key | tr -d '\n')
 
 # Ejecuta la evaluación
 promptfoo eval
+```
+
+**¿Qué debe pasar?**
+
+Verás una tabla como esta:
+
+```
+┌──────────────────────────────────────────────────────────────────┬──────────────────────────────────────────────────────────────────┐
+│ expected                                                         │ [openai:chat:deepseek-chat] ¿Cuál es la capital de Francia?      │
+├──────────────────────────────────────────────────────────────────┼──────────────────────────────────────────────────────────────────┤
+│ París                                                            │ [PASS] La capital de Francia es **París**.                       │
+└──────────────────────────────────────────────────────────────────┴──────────────────────────────────────────────────────────────────┘
+✓ Eval complete (ID: eval-XXXX-2026-11-16T23:49:06)
+
+Total Tokens: 22
+  Provider: 22 (13 prompt, 9 completion)
+
+Results:
+  ✓ 1 passed (100%)
+  0 failed (0%)
+  0 errors (0%)
+Duration: 1s (concurrency: 4)
+```
+
+**¡Felicidades!** Acabas de ejecutar tu primera evaluación de IA con Promptfoo y DeepSeek como juez. El `1 passed (100%)` significa que el modelo respondió correctamente y la aserción `contains: "París"` pasó.
+
+---
+
+### 🆕 PASO 14: Inicializar Git y hacer el primer commit
+
+```bash
+# Inicializa Git en la carpeta del curso
+git init
+
+# Verifica que el .env está ignorado
+git check-ignore .env
+```
+
+Debe imprimir `.env`.
+
+```bash
+# Agrega todos los archivos
+git add -A
+
+# Verifica que el .env NO se va a subir
+git status
+```
+
+**¿Qué debe aparecer en verde?**
+- `.gitignore`, `.env.example`, `package.json`, `package-lock.json`, `tsconfig.json`, `promptfooconfig.yaml`, `src/`, `tests/`
+
+**NO debe aparecer:**
+- `.env`, `node_modules/`, `.deepeval/`
+
+```bash
+# Hacer el primer commit
+git commit -m "feat(modulo-1): setup de AI Quality Engineering con Promptfoo"
+```
+
+---
+
+### 🆕 PASO 15: Crear el repositorio en GitHub y subir
+
+1. Ve a **`https://github.com/new`**
+2. Nombre: `AI-Quality-Engineering`
+3. Visibilidad: **Público** (para que GitHub Pages funcione gratis en el futuro)
+4. **NO** marques "Add a README", "Add .gitignore" ni "Choose a license"
+5. Haz clic en **Create repository**
+6. Copia la URL del repo (ej. `https://github.com/AbelOlveraMartinez369/AI-Quality-Engineering.git`)
+
+```bash
+# Conecta tu repo local con el remoto
+git remote add origin https://github.com/AbelOlveraMartinez369/AI-Quality-Engineering.git
+
+# Renombra la rama a main
+git branch -M main
+
+# Sube los cambios
+git push -u origin main
+```
+
+**¿Qué debe pasar?**
+
+```
+Enumerating objects: X, done.
+...
+To https://github.com/AbelOlveraMartinez369/AI-Quality-Engineering.git
+ * [new branch]      main -> main
+branch 'main' set up to track 'origin/main'.
+```
+
+> ⚠️ **Si te pide usuario y contraseña:** El usuario es tu nombre de GitHub, y la contraseña es tu **Token de Acceso Personal (PAT)** (el mismo que generaste en el curso anterior). Si no lo tienes a la mano, genera uno nuevo en `https://github.com/settings/tokens` con permiso `repo`.
+
+---
+
+### 🆕 PASO 16: Verificar que todo subió correctamente
+
+```bash
+git status
+```
+
+Debe imprimir:
+```
+On branch main
+Your branch is up to date with 'origin/main'.
+nothing to commit, working tree clean
+```
+
+Luego ve a tu repositorio en GitHub:
+```
+https://github.com/AbelOlveraMartinez369/AI-Quality-Engineering
+```
+
+Debes ver:
+- `src/` (con `utils/env.ts`)
+- `tests/` (con `evals/` vacío)
+- `package.json`, `package-lock.json`
+- `tsconfig.json`
+- `promptfooconfig.yaml`
+- `.gitignore`, `.env.example`
+
+> ⚠️ **CRÍTICO:** Verifica que **NO** aparezcan `.env`, `node_modules/` ni `.deepeval/`. Si aparecen, avísame inmediatamente.
+
+---
+
+### [CHECKLIST DEL MÓDULO 1]
+
+| Verificación                                              | Estado |
+| ---                                                       | ---    |
+| Carpeta `ai-quality-engineering` creada                   | ✅      |
+| `package.json` inicializado                               | ✅      |
+| TypeScript + `tsx` + `@types/node` instalados             | ✅      |
+| `tsconfig.json` creado con aliases                        | ✅      |
+| Carpetas `src/` y `tests/` creadas                        | ✅      |
+| `~/.secrets/deepseek-key` con la API Key (fuera del repo) | ✅      |
+| `.env` con `DEEPSEEK_API_KEY_FILE` (sin la key)           | ✅      |
+| `src/utils/env.ts` cargando la key desde el archivo       | ✅      |
+| Promptfoo instalado                                       | ✅      |
+| `promptfooconfig.yaml` configurado con `apiKeyEnvar`      | ✅      |
+| `promptfoo eval` ejecutado y aprobado (100%)              | ✅      |
+| `.gitignore` protegiendo `.env` y `node_modules`          | ✅      |
+| `.env.example` creado                                     | ✅      |
+| Git inicializado con primer commit                        | ✅      |
+| Repo conectado a GitHub y subido                          | ✅      |
+
+---
+
+### [CIERRE DEL VIDEO 1]
+
+> **"Chicos, acaban de escribir su primera evaluación de IA. No es un test de Playwright. Es un test que verifica si un modelo (DeepSeek) responde correctamente a una pregunta, y le pone un Pass o Fail objetivo."**
+
+> **"Usamos Promptfoo porque es open-source, gratuito, y funciona con cualquier proveedor sin exigir formatos JSON estrictos que DeepSeek no soporta. DeepEval era una opción, pero tiene un bug conocido con DeepSeek que nos hacía fallar. Promptfoo es más robusto y flexible."**
+
+> **"Lo más importante: nunca pongan su API Key en el código. En este proyecto, la Key está en un archivo fuera del repositorio (`~/.secrets/deepseek-key`), y el `.env` solo dice dónde está. Así, si suben el repo a GitHub público, nadie puede robarla."**
+
+> **"En el próximo módulo, vamos a construir un sistema completo de evaluación con múltiples métricas, reportes y comparación de versiones de un prompt para ver cuál alucina menos."**
+
+> **"Nos vemos en el Módulo 2."**
+
+---
+
+### [QUÉ VAMOS A CONSTRUIR EN EL MÓDULO 2]
+
+- Sistema completo de evaluación de prompts con Promptfoo.
+- Múltiples métricas (Correctness, Relevance, Hallucination).
+- Reporte en consola con puntajes del 0 al 1.
+- Comparación A/B de dos versiones de un prompt para ver cuál alucina menos.
+
+---
+
+**FIN DEL MÓDULO 1**
+```
+
+---
+
+Ahí lo tienes, Abel. **Un solo bloque, completo, con todas las correcciones aplicadas y el manejo seguro de la API Key.** Guárdalo en tu archivo maestro del curso, y cuando estés listo, empezamos con el Módulo 2. 🚀
+
+
+
+# MÓDULO 2 — Evaluación de LLMs: La Muerte del "Se Ve Bien"
+
+
+REQUISITO PREVIO:
+- Haber completado el Módulo 1.
+- Tener el proyecto `AI-Quality-Engineering` con Promptfoo funcionando.
+- La API Key de DeepSeek configurada en `~/.secrets/deepseek-key`.
+
+ESTRUCTURA DE ARCHIVOS QUE VAMOS A TOCAR:
+- promptfooconfig.yaml (REEMPLAZAR con múltiples métricas)
+- prompts/ (CREAR carpeta con los prompts a evaluar)
+- .github/workflows/prompt-eval.yml (CREAR para CI/CD)
+
+
+Múltiples Métricas de Evaluación
+
+### [QUÉ VAMOS A CONSTRUIR EN ESTE MÓDULO]
+
+✅ Sistema de evaluación con múltiples métricas
+✅ Reporte visual con promptfoo view
+✅ Comparación A/B de dos versiones de un prompt
+✅ Integración con GitHub Actions para CI/CD
 
 
 
 
 
-# Asegúrate de que la variable está exportada en esta terminal
-export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key | tr -d '\n')
-
-# Ejecuta Promptfoo
-promptfoo eval
 
 
 
-
-
-
-# Desinstala DeepEval
-npm uninstall deepeval
-
-# Elimina el archivo de configuración de DeepEval (ya no se usa)
-rm -f src/utils/deepevalConfig.ts
-
-# Elimina el test de DeepEval (lo reemplazamos con Promptfoo)
-rm -f tests/evals/primerTest.test.ts
-
-# Verifica que ya no existe
-ls src/utils/ tests/evals/
-
-
-
-📋 CHECKLIST FINAL DEL MÓDULO 1
-Verificación	                                  Estado
-Carpeta ai-quality-engineering creada	            ✅
-package.json inicializado	                        ✅
-TypeScript + tsx + @types/node instalados	        ✅
-tsconfig.json creado con aliases	                ✅
-Carpetas src/ y tests/ creadas	                    ✅
-~/.secrets/deepseek-key con la API Key	            ✅
-.env con DEEPSEEK_API_KEY_FILE	                    ✅
-src/utils/env.ts cargando la key	                ✅
-Promptfoo instalado	                                ✅
-promptfooconfig.yaml configurado con apiKeyEnvar	✅
-promptfoo eval ejecutado y aprobado (100%)	        ✅
-.gitignore protegiendo .env	                        ✅
-Git inicializado con primer commit	                ✅
-DeepEval eliminado (limpieza)	                    ⏳

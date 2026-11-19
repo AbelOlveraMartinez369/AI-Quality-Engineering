@@ -1,0 +1,45 @@
+# Nombre del workflow
+name: 'Prompt Evaluation'
+
+# Se dispara cuando hay un Pull Request que modifica archivos en prompts/
+on:
+  pull_request:
+    paths:
+      - 'prompts/**'
+      - 'promptfooconfig.yaml'
+
+# Define los jobs
+jobs:
+  evaluate:
+    # Corre en Ubuntu
+    runs-on: ubuntu-latest
+    # Permisos para comentar en el PR
+    permissions:
+      pull-requests: write
+    steps:
+      # Descarga el código
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      # Configura Node.js
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # Instala Promptfoo
+      - name: Instalar Promptfoo
+        run: npm install -g promptfoo
+
+      # Ejecuta la evaluación con DeepSeek
+      - name: Ejecutar evaluación
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: promptfoo eval --output results.json
+
+      # Publica el resultado como artefacto (para descargar)
+      - name: Subir resultados
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-eval-results
+          path: results.json
