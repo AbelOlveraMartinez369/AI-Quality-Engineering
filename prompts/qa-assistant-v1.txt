@@ -1,1 +1,1 @@
-Responde: {{question}}
+Responde : {{question}}
