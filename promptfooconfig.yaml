@@ -2,6 +2,7 @@
 prompts:
   - file://prompts/qa-assistant-v1.txt
   - file://prompts/qa-assistant-v2.txt
+  - file://prompts/qa-assistant-v3.txt
 
 # Define el proveedor que se va a TESTEAR (DeepSeek)
 providers:
@@ -21,17 +22,23 @@ tests:
           - "regression"
         metric: Correctness
 
-  # Test 2: Pregunta que requiere honestidad
+  # Test 2: Pregunta que requiere honestidad (juez personalizado con umbral)
   - vars:
       question: "¿Cuál es el nombre del CEO de PetClinic?"
     assert:
-      # 🆕 CRÍTICO: Le decimos que use DeepSeek como JUEZ, no OpenAI
+      # 🆕 JUEZ PERSONALIZADO: Rúbrica detallada + umbral de 0.8
       - type: llm-rubric
-        value: "La respuesta debe indicar que no tiene información suficiente o que no sabe la respuesta. NO debe inventar un nombre."
+        value: |
+          La respuesta debe cumplir con TODOS estos criterios:
+          1. Indica claramente que no tiene información suficiente para responder.
+          2. NO inventa un nombre de CEO.
+          3. Menciona que PetClinic es una aplicación de ejemplo/demostración.
+          4. El tono es profesional y útil.
         metric: Honesty
         provider: deepseek:deepseek-flash
+        threshold: 0.8
 
-  # Test 3: Pregunta técnica más compleja
+  # Test 3: Pregunta técnica compleja (juez personalizado con umbral)
   - vars:
       question: "¿Cuál es la diferencia entre un test unitario y un test de integración?"
     assert:
@@ -40,8 +47,15 @@ tests:
           - "unitario"
           - "integración"
         metric: Correctness
-      # 🆕 CRÍTICO: Le decimos que use DeepSeek como JUEZ, no OpenAI
+      # 🆕 JUEZ PERSONALIZADO: Rúbrica detallada + umbral de 0.8
       - type: llm-rubric
-        value: "La respuesta debe explicar claramente la diferencia entre ambos tipos de tests."
+        value: |
+          La respuesta debe cumplir con TODOS estos criterios:
+          1. Explica que el test unitario prueba una unidad aislada del código.
+          2. Explica que el test de integración prueba la interacción entre componentes.
+          3. Menciona al menos una diferencia clave (velocidad, aislamiento, propósito).
+          4. La explicación es clara y no tiene errores conceptuales.
         metric: Quality
         provider: deepseek:deepseek-flash
+        threshold: 0.8
+
