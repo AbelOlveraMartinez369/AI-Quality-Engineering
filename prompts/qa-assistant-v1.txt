@@ -1,1 +1,1 @@
-R: {{question}}
+R : {{question}}
