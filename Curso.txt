@@ -589,8 +589,24 @@ Ahí lo tienes, Abel. **Un solo bloque, completo, con todas las correcciones apl
 
 
 
-# MÓDULO 2 — Evaluación de LLMs: La Muerte del "Se Ve Bien"
 
+
+
+
+
+
+
+
+
+(Módulo 2) — Múltiples Métricas de Evaluación
+
+Abel, aquí tienes el **Módulo 2 completo y definitivo**, con todas las correcciones que aplicamos en la vida real (el proveedor `deepseek:deepseek-flash`, el juez `llm-rubric` apuntando a DeepSeek, y el workflow de GitHub Actions que ya probaste y funcionó). Listo para copiar y pegar en tu archivo maestro.
+
+---
+
+```markdown
+# MÓDULO 2 — Evaluación de LLMs: La Muerte del "Se Ve Bien"
+## Curso: AI Quality Engineering — Del Prompt al Pipeline
 
 REQUISITO PREVIO:
 - Haber completado el Módulo 1.
@@ -598,19 +614,453 @@ REQUISITO PREVIO:
 - La API Key de DeepSeek configurada en `~/.secrets/deepseek-key`.
 
 ESTRUCTURA DE ARCHIVOS QUE VAMOS A TOCAR:
-- promptfooconfig.yaml (REEMPLAZAR con múltiples métricas)
-- prompts/ (CREAR carpeta con los prompts a evaluar)
-- .github/workflows/prompt-eval.yml (CREAR para CI/CD)
+- prompts/qa-assistant-v1.txt       (NUEVO)
+- prompts/qa-assistant-v2.txt       (NUEVO)
+- promptfooconfig.yaml              (REEMPLAZAR con múltiples métricas)
+- .github/workflows/prompt-eval.yml (NUEVO)
 
 
-Múltiples Métricas de Evaluación
+# VIDEO 1 (Módulo 2) — Múltiples Métricas de Evaluación
+## Módulo 2: Evaluación de LLMs
+
+---
+
+### [INTRO]
+
+> **"Chicos, en el Módulo 1 evaluamos una sola respuesta con una sola métrica. Pero en el mundo real, un prompt no se evalúa con un solo criterio. Necesitas medir si la respuesta es correcta, si es relevante, si alucina, si es segura. Hoy vamos a construir un sistema de evaluación multi-métrica con Promptfoo."**
+
+---
 
 ### [QUÉ VAMOS A CONSTRUIR EN ESTE MÓDULO]
 
+```
 ✅ Sistema de evaluación con múltiples métricas
-✅ Reporte visual con promptfoo view
+✅ Reporte visual con `promptfoo view`
 ✅ Comparación A/B de dos versiones de un prompt
 ✅ Integración con GitHub Actions para CI/CD
+```
+
+---
+
+### [PASO 1: Crear la carpeta de prompts]
+
+```bash
+# Crea la carpeta de prompts
+mkdir -p prompts
+
+# Verifica que se creó
+ls -la
+```
+
+---
+
+### [PASO 2: Crear el primer prompt a evaluar (v1)]
+
+```bash
+# Crea el archivo del prompt v1
+nano prompts/qa-assistant-v1.txt
+```
+
+Pega esto:
+
+```
+Eres un asistente de QA. Responde la siguiente pregunta del usuario de forma clara y concisa:
+
+{{question}}
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+---
+
+### [PASO 3: Crear el segundo prompt (versión mejorada, v2)]
+
+```bash
+# Crea el archivo del prompt v2
+nano prompts/qa-assistant-v2.txt
+```
+
+Pega esto:
+
+```
+Eres un asistente de QA experto. Responde la siguiente pregunta del usuario de forma clara, concisa y precisa. Si no sabes la respuesta, di "No tengo suficiente información para responder".
+
+Pregunta: {{question}}
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+---
+
+### [PASO 4: Actualizar el `promptfooconfig.yaml` con múltiples métricas]
+
+> **"Chicos, aquí está el corazón del módulo: la configuración de Promptfoo con múltiples métricas. Vamos a evaluar Correctitud, Honestidad y Calidad. Y lo más importante: el juez de las métricas LLM (`llm-rubric`) también usa DeepSeek, no OpenAI. Así todo el sistema es 100% gratuito."**
+
+```bash
+# Abre el archivo de configuración
+nano promptfooconfig.yaml
+```
+
+Pega esto **exactamente**:
+
+```yaml
+# Define los prompts que se van a evaluar (dos versiones)
+prompts:
+  - file://prompts/qa-assistant-v1.txt
+  - file://prompts/qa-assistant-v2.txt
+
+# Define el proveedor que se va a TESTEAR (DeepSeek)
+providers:
+  - id: deepseek:deepseek-flash
+    config:
+      apiKeyEnvar: DEEPSEEK_API_KEY
+
+# Define los tests
+tests:
+  # Test 1: Pregunta simple de QA
+  - vars:
+      question: "¿Qué es un test de regresión?"
+    assert:
+      # Métrica 1: Verifica que la respuesta contenga palabras clave esperadas
+      - type: contains-any
+        value:
+          - "regresión"
+          - "regression"
+        metric: Correctness
+
+  # Test 2: Pregunta que requiere honestidad (el modelo debe admitir si no sabe)
+  - vars:
+      question: "¿Cuál es el nombre del CEO de PetClinic?"
+    assert:
+      # Métrica 1: El modelo debe admitir que no sabe (no debe inventar)
+      # 🆕 CRÍTICO: Le decimos que use DeepSeek como JUEZ, no OpenAI
+      - type: llm-rubric
+        value: "La respuesta debe indicar que no tiene información suficiente o que no sabe la respuesta. NO debe inventar un nombre."
+        metric: Honesty
+        provider: deepseek:deepseek-flash
+
+  # Test 3: Pregunta técnica más compleja
+  - vars:
+      question: "¿Cuál es la diferencia entre un test unitario y un test de integración?"
+    assert:
+      # Métrica 1: Verifica que la respuesta mencione ambos conceptos
+      - type: contains-all
+        value:
+          - "unitario"
+          - "integración"
+        metric: Correctness
+      # Métrica 2: Verifica que la respuesta sea coherente y bien estructurada
+      # 🆕 CRÍTICO: Le decimos que use DeepSeek como JUEZ, no OpenAI
+      - type: llm-rubric
+        value: "La respuesta debe explicar claramente la diferencia entre ambos tipos de tests."
+        metric: Quality
+        provider: deepseek:deepseek-flash
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+---
+
+### [PASO 5: Explicar las métricas usadas]
+
+> **"Chicos, estas son las métricas que usamos:"**
+
+|    Métrica     |     Tipo     |                                   Qué evalúa                                    |
+| ---------      | ------       | ------------                                                                    |
+| `contains-any` | Determinista | Verifica que la respuesta contenga al menos una de las palabras clave           |
+| `contains-all` | Determinista | Verifica que la respuesta contenga todas las palabras clave                     |
+| `llm-rubric`   | LLM-as-judge | Evalúa la respuesta contra una rúbrica personalizada, usando DeepSeek como juez |
+
+**Explicación de cada una:**
+
+- **`contains-any`**: Útil para verificar terminología específica. Es rápido y no cuesta tokens.
+- **`contains-all`**: Verifica que la respuesta mencione todos los conceptos clave.
+- **`llm-rubric`**: La métrica más flexible. Le das una rúbrica en lenguaje natural y el juez (DeepSeek) califica si la respuesta la cumple. **Importante:** el `provider: deepseek:deepseek-flash` le dice a Promptfoo que use DeepSeek como juez, no OpenAI. Sin eso, Promptfoo intentaría usar OpenAI y fallaría.
+
+---
+
+### [PASO 6: Exportar la API Key y ejecutar la evaluación]
+
+```bash
+# Exporta la API Key
+export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key | tr -d '\n')
+
+# Ejecuta la evaluación
+promptfoo eval
+```
+
+**¿Qué debe pasar?**
+
+Verás una tabla como esta:
+
+```
+┌────────────────────────────────────────────┬─────────────────────┬─────────────────────┐
+│ question                                   │ qa-assistant-v1.txt │ qa-assistant-v2.txt │
+├────────────────────────────────────────────┼─────────────────────┼─────────────────────┤
+│ ¿Qué es un test de regresión?              │ [PASS]              │ [PASS]              │
+│ ¿Cuál es el nombre del CEO de PetClinic?   │ [PASS]              │ [PASS]              │
+│ ¿Cuál es la diferencia entre...?           │ [PASS]              │ [PASS]              │
+└────────────────────────────────────────────┴─────────────────────┴─────────────────────┘
+
+Results:
+  ✓ 6 passed (100%)
+  0 failed (0%)
+  0 errors (0%)
+```
+
+**Lo que debes observar:**
+
+- Ambos prompts pasan los tests de correctitud y honestidad.
+- La `llm-rubric` usa DeepSeek como juez, no OpenAI.
+- El costo total es de centavos (puedes verlo en el output de Promptfoo).
+
+---
+
+### [PASO 7: Ver el reporte visual]
+
+```bash
+# Abre el visor web de Promptfoo
+promptfoo view
+```
+
+**¿Qué debe pasar?**
+
+Se abre una ventana en tu navegador con un reporte visual que muestra:
+- Cada test con su puntuación
+- El output de cada prompt
+- Las métricas que pasaron y las que fallaron
+- La comparación entre v1 y v2
+- El costo y los tokens consumidos
+
+> **"Chicos, este es el 'Allure' de la IA. Un reporte visual que cualquier stakeholder puede entender sin saber código."**
+
+---
+
+### [CIERRE DEL VIDEO 1]
+
+> **"Acaban de construir un sistema de evaluación multi-métrica. Ya no es 'se ve bien' o 'no se ve bien'. Es 'pasa 6 de 6 métricas' o 'falla en honestidad'. Eso es lo que un AI Quality Engineer entrega."**
+
+> **"Lo más importante: el juez de las métricas LLM (`llm-rubric`) también usa DeepSeek, no OpenAI. Así todo el sistema es 100% gratuito."**
+
+> **"En el próximo video, vamos a llevar esto a GitHub Actions: cuando alguien modifique un prompt, el pipeline ejecutará automáticamente la evaluación y bloqueará el merge si el prompt empeora."**
+
+---
+
+# VIDEO 2 (Módulo 2) — Integración con GitHub Actions (CI/CD para Prompts)
+## Módulo 2: Evaluación de LLMs
+
+---
+
+### [INTRO]
+
+> **"Chicos, ya tenemos las evaluaciones funcionando en local. Pero el verdadero poder está en automatizarlas. Cuando un desarrollador cambie un prompt, el pipeline debe evaluarlo automáticamente y decir: 'este cambio empeoró la calidad' o 'este cambio es seguro'."**
+
+---
+
+### [PASO 1: Crear la carpeta de workflows]
+
+```bash
+# Crea la carpeta .github/workflows
+mkdir -p .github/workflows
+
+# Verifica
+ls -la .github/
+```
+
+---
+
+### [PASO 2: Crear el workflow de GitHub Actions]
+
+```bash
+# Crea el archivo del workflow
+nano .github/workflows/prompt-eval.yml
+```
+
+Pega esto:
+
+```yaml
+# Nombre del workflow
+name: 'Prompt Evaluation'
+
+# Se dispara cuando hay un Pull Request que modifica archivos en prompts/
+on:
+  pull_request:
+    paths:
+      - 'prompts/**'
+      - 'promptfooconfig.yaml'
+
+# Define los jobs
+jobs:
+  evaluate:
+    # Corre en Ubuntu
+    runs-on: ubuntu-latest
+    # Permisos para comentar en el PR
+    permissions:
+      pull-requests: write
+    steps:
+      # Descarga el código
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      # Configura Node.js
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # Instala Promptfoo
+      - name: Instalar Promptfoo
+        run: npm install -g promptfoo
+
+      # Ejecuta la evaluación con DeepSeek
+      - name: Ejecutar evaluación
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: promptfoo eval --output results.json
+
+      # Publica el resultado como artefacto (para descargar)
+      - name: Subir resultados
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-eval-results
+          path: results.json
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+---
+
+### [PASO 3: Configurar el Secret en GitHub]
+
+> **"Chicos, para que GitHub Actions use DeepSeek, necesitamos guardar la API Key como un Secret del repositorio. Nunca la pongan en el código."**
+
+1. Ve a tu repositorio en GitHub: `https://github.com/AbelOlveraMartinez369/AI-Quality-Engineering`
+2. Haz clic en **Settings** (Configuración)
+3. En el menú lateral, ve a **Secrets and variables → Actions**
+4. Haz clic en **New repository secret**
+5. Nombre: `DEEPSEEK_API_KEY`
+6. Valor: tu API Key de DeepSeek (cópiala de `~/.secrets/deepseek-key`)
+7. Haz clic en **Add secret**
+
+---
+
+### [PASO 4: Hacer commit y subir el workflow]
+
+```bash
+# Agrega los archivos nuevos
+git add -A
+
+# Verifica que no se suba el .env
+git status
+
+# Haz commit
+git commit -m "feat(modulo-2): sistema de evaluación multi-métrica con Promptfoo"
+
+# Sube los cambios
+git push origin main
+```
+
+---
+
+### [PASO 5: Probar el workflow con un Pull Request]
+
+> **"Chicos, vamos a probar que el pipeline funciona. Vamos a crear una rama, modificar un prompt (para empeorarlo a propósito), y ver cómo el pipeline lo detecta."**
+
+```bash
+# Crea una rama nueva
+git checkout -b test-prompt-eval
+
+# Modifica el prompt v1 para que sea peor (elimina la instrucción de claridad)
+nano prompts/qa-assistant-v1.txt
+```
+
+Cambia el contenido a algo como:
+```
+Responde esto: {{question}}
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+```bash
+# Haz commit del cambio
+git add prompts/qa-assistant-v1.txt
+git commit -m "test: empeorar prompt v1 para probar pipeline"
+
+# Sube la rama
+git push origin test-prompt-eval
+```
+
+---
+
+### [PASO 6: Crear el Pull Request en GitHub]
+
+1. Ve a tu repositorio en GitHub
+2. Verás un banner que dice "test-prompt-eval had recent pushes"
+3. Haz clic en **Compare & pull request**
+4. Título: "Test: empeorar prompt v1"
+5. Haz clic en **Create pull request**
+
+**¿Qué debe pasar?**
+
+- El workflow **"Prompt Evaluation"** se dispara automáticamente.
+- En la pestaña **Actions**, verás el workflow corriendo.
+- Cuando termine, verás si la evaluación pasó o falló.
+
+> ⚠️ **Nota:** El workflow tal como está **no bloquea el merge** todavía. Solo ejecuta la evaluación y sube los resultados como artefacto. En el Módulo 3 agregaremos el bloqueo del merge si la evaluación falla.
+
+---
+
+### [PASO 7: Ver los resultados del pipeline]
+
+1. Ve a la pestaña **Actions** del repositorio
+2. Haz clic en el workflow que se ejecutó
+3. Haz clic en el job **evaluate**
+4. Verás los logs de la evaluación de Promptfoo
+5. En la sección **Artifacts**, descarga `prompt-eval-results` para ver el JSON con los resultados
+
+---
+
+### [CIERRE DEL VIDEO 2]
+
+> **"Chicos, acaban de integrar la evaluación de IA en el pipeline de CI/CD. Cada vez que alguien modifique un prompt, GitHub Actions ejecutará la evaluación automáticamente. En el próximo módulo, vamos a hacer que el pipeline **bloquee el merge** si la evaluación falla, igual que un test de Playwright roto."**
+
+> **"Esto es lo que separa a un QA de un AI Quality Engineer: no solo evaluar, sino automatizar la evaluación y ponerle límites al pipeline."**
+
+---
+
+# RESUMEN DEL MÓDULO 2
+
+```
+✅ Sistema de evaluación multi-métrica (Correctness, Honesty, Quality)
+✅ Reporte visual con `promptfoo view`
+✅ Comparación A/B de dos versiones de un prompt
+✅ Workflow de GitHub Actions para evaluar prompts en Pull Requests
+✅ Configuración segura de la API Key como Secret en GitHub
+✅ Juez de métricas LLM usando DeepSeek (no OpenAI)
+```
+
+---
+
+### [CHECKLIST DEL MÓDULO 2]
+
+| Verificación                                                   | Estado |
+| ---                                                            | ---    |
+| Carpeta `prompts/` creada con v1 y v2                          | ✅      |
+| `promptfooconfig.yaml` con múltiples métricas y juez DeepSeek  | ✅      |
+| `promptfoo eval` ejecutado con éxito (6/6 passed)              | ✅      |
+| `promptfoo view` muestra el reporte                            | ⏳      |
+| Workflow de GitHub Actions creado                              | ✅      |
+| Secret `DEEPSEEK_API_KEY` configurado en GitHub                | ✅      |
+| Pull Request de prueba creado y workflow ejecutado (6/6 tests) | ✅      |
+
+---
+
+**FIN DEL MÓDULO 2**
+```
+
+---
+
+Ahí lo tienes, Abel. **Un solo bloque, completo, con todas las correcciones aplicadas.** Guárdalo en tu archivo maestro del curso, y cuando estés listo, empezamos con el Módulo 3. 🚀
 
 
 
@@ -619,3 +1069,38 @@ Múltiples Métricas de Evaluación
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+# MÓDULO 3 — El Juez Personalizado y el Bloqueo del Pipeline
+
+
+REQUISITO PREVIO:
+- Haber completado el Módulo 2.
+- Tener el proyecto `AI-Quality-Engineering` con Promptfoo y GitHub Actions funcionando.
+- La API Key de DeepSeek configurada en `~/.secrets/deepseek-key` y en los Secrets de GitHub.
+
+
+ESTRUCTURA DE ARCHIVOS QUE VAMOS A TOCAR:
+- prompts/qa-assistant-v3.txt       (NUEVO)
+- promptfooconfig.yaml              (REEMPLAZAR con juez personalizado y threshold)
+- .github/workflows/prompt-eval.yml (REEMPLAZAR con bloqueo de merge)
+
+
+✅ Juez personalizado con rúbricas de negocio
+✅ Umbral de calidad (threshold) para cada métrica
+✅ Bloqueo automático del merge en GitHub Actions
+✅ Comentario automático en el PR con el resultado
+
+
+El Bloqueo del Merge (Quality Gate en CI/CD)

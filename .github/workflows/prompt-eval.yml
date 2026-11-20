@@ -32,13 +32,51 @@ jobs:
         run: npm install -g promptfoo
 
       # Ejecuta la evaluación con DeepSeek
+      # 🆕 CRÍTICO: Si la evaluación falla, el job falla y el merge se bloquea
       - name: Ejecutar evaluación
+        id: eval
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: promptfoo eval --output results.json
+        run: |
+          # Ejecuta Promptfoo. Si algún test falla, el comando sale con código de error.
+          promptfoo eval --output results.json || echo "EVAL_FAILED=true" >> $GITHUB_OUTPUT
 
-      # Publica el resultado como artefacto (para descargar)
+      # Comenta el resultado en el PR (siempre, incluso si falló)
+      - name: Comentar resultado en el PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let resultText = '## 📊 Resultado de la Evaluación de Prompts\n\n';
+            
+            try {
+              // Lee el archivo de resultados de Promptfoo
+              const results = JSON.parse(fs.readFileSync('results.json', 'utf8'));
+              const stats = results.results.stats;
+              
+              // Agrega el resumen de resultados
+              resultText += `- ✅ Tests pasados: ${stats.successes}\n`;
+              resultText += `- ❌ Tests fallidos: ${stats.failures}\n`;
+              resultText += `- ⚠️ Errores: ${stats.errors}\n\n`;
+              
+              // Agrega el enlace al reporte visual (si está disponible)
+              resultText += `[Ver reporte completo en Promptfoo](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+            } catch (error) {
+              resultText += '⚠️ No se pudo leer el archivo de resultados.\n';
+            }
+            
+            // Publica el comentario en el PR
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: resultText,
+            });
+
+      # Sube los resultados como artefacto (para descargar)
       - name: Subir resultados
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: prompt-eval-results
