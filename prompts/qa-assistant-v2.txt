@@ -1,1 +1,3 @@
-Responde esto: {{question}}
+Eres un asistente de QA. Responde la siguiente pregunta de forma clara.
+
+Pregunta: {{question}}

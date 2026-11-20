@@ -1,83 +1,75 @@
-# Nombre del workflow
 name: 'Prompt Evaluation'
 
-# Se dispara cuando hay un Pull Request que modifica archivos en prompts/
+# Sin filtro de paths a propósito: si el check es obligatorio y no corre,
+# el PR se queda bloqueado para siempre esperando un check que nunca llega.
 on:
   pull_request:
-    paths:
-      - 'prompts/**'
-      - 'promptfooconfig.yaml'
 
-# Define los jobs
 jobs:
   evaluate:
-    # Corre en Ubuntu
     runs-on: ubuntu-latest
-    # Permisos para comentar en el PR
     permissions:
+      contents: read
       pull-requests: write
     steps:
-      # Descarga el código
       - name: Checkout código
         uses: actions/checkout@v4
 
-      # Configura Node.js
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '24'
 
-      # Instala Promptfoo
       - name: Instalar Promptfoo
         run: npm install -g promptfoo
 
-      # Ejecuta la evaluación con DeepSeek
-      # 🆕 CRÍTICO: Si la evaluación falla, el job falla y el merge se bloquea
-      - name: Ejecutar evaluación
+      # continue-on-error deja que los pasos siguientes (comentario y artefacto)
+      # corran aunque falle. El bloqueo real lo hace el último paso.
+      - name: Ejecutar evaluación (Quality Gate)
         id: eval
+        continue-on-error: true
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: |
-          # Ejecuta Promptfoo. Si algún test falla, el comando sale con código de error.
-          promptfoo eval --output results.json || echo "EVAL_FAILED=true" >> $GITHUB_OUTPUT
+        run: promptfoo eval -c promptfooconfig.gate.yaml --output results.json
 
-      # Comenta el resultado en el PR (siempre, incluso si falló)
       - name: Comentar resultado en el PR
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
-            let resultText = '## 📊 Resultado de la Evaluación de Prompts\n\n';
-            
+            const failed = '${{ steps.eval.outcome }}' === 'failure';
+            let body = '## 📊 Quality Gate de Prompts\n\n';
+            body += failed
+              ? '### ❌ BLOQUEADO: la calidad no alcanzó el umbral\n\n'
+              : '### ✅ APROBADO: la calidad cumple el umbral\n\n';
             try {
-              // Lee el archivo de resultados de Promptfoo
               const results = JSON.parse(fs.readFileSync('results.json', 'utf8'));
               const stats = results.results.stats;
-              
-              // Agrega el resumen de resultados
-              resultText += `- ✅ Tests pasados: ${stats.successes}\n`;
-              resultText += `- ❌ Tests fallidos: ${stats.failures}\n`;
-              resultText += `- ⚠️ Errores: ${stats.errors}\n\n`;
-              
-              // Agrega el enlace al reporte visual (si está disponible)
-              resultText += `[Ver reporte completo en Promptfoo](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+              body += `- ✅ Tests pasados: ${stats.successes}\n`;
+              body += `- ❌ Tests fallidos: ${stats.failures}\n`;
+              body += `- ⚠️ Errores: ${stats.errors}\n\n`;
             } catch (error) {
-              resultText += '⚠️ No se pudo leer el archivo de resultados.\n';
+              body += '⚠️ No se pudo leer el archivo de resultados.\n\n';
             }
-            
-            // Publica el comentario en el PR
-            github.rest.issues.createComment({
+            body += `[Ver ejecución completa](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+            await github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: resultText,
+              body: body,
             });
 
-      # Sube los resultados como artefacto (para descargar)
       - name: Subir resultados
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: prompt-eval-results
           path: results.json
+
+      # ESTE paso es el que bloquea: hace fallar el job si la evaluación falló
+      - name: Bloquear si la evaluación falló
+        if: steps.eval.outcome == 'failure'
+        run: |
+          echo "❌ La evaluación no alcanzó el umbral de calidad. Merge bloqueado."
+          exit 1

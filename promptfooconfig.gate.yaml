@@ -1,0 +1,11 @@
+description: "Quality Gate de CI/CD (solo el prompt en producción: v3)"
+
+prompts:
+  - file://prompts/qa-assistant-v3.txt
+
+providers:
+  - id: deepseek:deepseek-flash
+    config:
+      apiKeyEnvar: DEEPSEEK_API_KEY
+
+tests: file://tests/evals/qa-tests.yaml

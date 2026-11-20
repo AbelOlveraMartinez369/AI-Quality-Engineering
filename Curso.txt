@@ -1084,23 +1084,3 @@ Ahí lo tienes, Abel. **Un solo bloque, completo, con todas las correcciones apl
 
 # MÓDULO 3 — El Juez Personalizado y el Bloqueo del Pipeline
 
-
-REQUISITO PREVIO:
-- Haber completado el Módulo 2.
-- Tener el proyecto `AI-Quality-Engineering` con Promptfoo y GitHub Actions funcionando.
-- La API Key de DeepSeek configurada en `~/.secrets/deepseek-key` y en los Secrets de GitHub.
-
-
-ESTRUCTURA DE ARCHIVOS QUE VAMOS A TOCAR:
-- prompts/qa-assistant-v3.txt       (NUEVO)
-- promptfooconfig.yaml              (REEMPLAZAR con juez personalizado y threshold)
-- .github/workflows/prompt-eval.yml (REEMPLAZAR con bloqueo de merge)
-
-
-✅ Juez personalizado con rúbricas de negocio
-✅ Umbral de calidad (threshold) para cada métrica
-✅ Bloqueo automático del merge en GitHub Actions
-✅ Comentario automático en el PR con el resultado
-
-
-El Bloqueo del Merge (Quality Gate en CI/CD)
