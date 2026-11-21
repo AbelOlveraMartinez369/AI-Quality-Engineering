@@ -1084,3 +1084,712 @@ Ahí lo tienes, Abel. **Un solo bloque, completo, con todas las correcciones apl
 
 # MÓDULO 3 — El Juez Personalizado y el Bloqueo del Pipeline
 
+
+Listo, Abel. Todo el módulo va en **un solo bloque**, así que el botón de copiar de la esquina superior derecha lo copia completo, sin seleccionar nada. Ya incluye la ruta corregida de `tests/qa-tests.yaml` y todos los arreglos de las versiones anteriores.
+
+````markdown
+# MÓDULO 3 — El Juez Personalizado y el Quality Gate
+## Curso: AI Quality Engineering — Del Prompt al Pipeline
+
+---
+
+## REQUISITOS
+
+- Módulo 2 completado.
+- Repo `AI-Quality-Engineering` con Promptfoo y GitHub Actions funcionando.
+- API key de DeepSeek guardada en `~/.secrets/deepseek-key`.
+- Secret `DEEPSEEK_API_KEY` creado en GitHub (Settings → Secrets and variables → Actions).
+
+## QUÉ CONSTRUIMOS
+
+```
+✅ Juez personalizado con rúbricas de negocio y umbral (threshold)
+✅ Quality Gate en GitHub Actions que falla si la calidad baja
+✅ Protección de rama para que GitHub bloquee el merge de verdad
+✅ Comentario automático en el PR con el resultado
+```
+
+## ARCHIVOS QUE VAMOS A CREAR O REEMPLAZAR
+
+```
+prompts/qa-assistant-v1.txt          (prompt débil)
+prompts/qa-assistant-v2.txt          (prompt intermedio)
+prompts/qa-assistant-v3.txt          (prompt de producción)
+tests/qa-tests.yaml                  (pruebas con juez personalizado, compartidas)
+promptfooconfig.yaml                 (compara v1, v2, v3 en local: Video 1)
+promptfooconfig.gate.yaml            (solo v3, lo usa el CI: Video 2)
+.github/workflows/prompt-eval.yml    (el Quality Gate)
+```
+
+---
+
+# 🧰 ANTES DE GRABAR (sin cámara, 3 minutos)
+
+**P.1 Revisa en GitHub (navegador):**
+
+1. Pestaña **Pull requests**: no debe haber PRs de pruebas anteriores abiertos.
+2. **Settings → Branches**: no debe haber ninguna regla para `main`. Si hay una, bórrala (Delete). Si no, tu `git push origin main` del Video 2 será rechazado.
+3. **Settings → Secrets and variables → Actions**: debe existir un secret llamado exactamente `DEEPSEEK_API_KEY`. Si no existe: **New repository secret** → Name: `DEEPSEEK_API_KEY` → Secret: tu key.
+
+**P.2 Limpia ramas de pruebas anteriores (si existen).** Si alguna rama no existe, el error "not found" es normal, ignóralo.
+
+```bash
+git checkout main
+git pull origin main
+git branch -D test-merge-block 6test-merge-block 7test-merge-block demo-prompt-malo
+git push origin --delete test-merge-block 6test-merge-block 7test-merge-block demo-prompt-malo
+```
+
+**P.3 Revisa tu entorno:**
+
+```bash
+git status
+node --version
+promptfoo --version
+ls ~/.secrets/deepseek-key
+git check-ignore node_modules .env
+```
+
+- `git status` debe decir `nothing to commit, working tree clean` (o mostrar solo archivos tuyos del proyecto).
+- `git check-ignore` debe imprimir **las dos líneas**: `node_modules` y `.env`. Si falta alguna, NO hagas commit hasta arreglar el `.gitignore`.
+- Si `promptfoo` no existe: `npm install -g promptfoo`.
+
+---
+
+# 🎬 VIDEO 1: El Juez Personalizado
+
+### [INTRO]
+
+> "Chicos, en el Módulo 2 evaluamos prompts con métricas simples: ¿contiene tal palabra? Pero en el mundo real un prompt se evalúa con criterios de negocio: ¿es honesto?, ¿es correcto?, ¿es útil? Hoy vamos a construir un **juez personalizado**: le damos a un LLM una rúbrica detallada y un **umbral**. Si el juez no le da al menos 0.8, el test falla."
+
+---
+
+### PASO 1: Los tres prompts
+
+> "Tenemos tres versiones del prompt: la v1 es mínima, la v2 un poco mejor y la v3 es la que consideramos de producción: pide claridad y admitir cuando no sabe."
+
+```bash
+cat > prompts/qa-assistant-v1.txt << 'EOF'
+Responde esto: {{question}}
+EOF
+
+cat > prompts/qa-assistant-v2.txt << 'EOF'
+Eres un asistente de QA. Responde la siguiente pregunta de forma clara.
+
+Pregunta: {{question}}
+EOF
+
+cat > prompts/qa-assistant-v3.txt << 'EOF'
+Eres un asistente de QA experto. Responde la siguiente pregunta del usuario de forma clara, concisa y precisa. Si no sabes la respuesta, di "No tengo suficiente información para responder". Si la pregunta es sobre un tema que no dominas, admítelo honestamente.
+
+Pregunta: {{question}}
+EOF
+```
+
+✅ **Debe pasar:** no imprime nada.
+
+---
+
+### PASO 2: Las pruebas con el juez personalizado
+
+> "Aquí está lo importante. Tenemos tres pruebas. La primera es determinista: busca una palabra. Las otras dos usan `llm-rubric`: en vez de una frase vaga, le damos al juez una lista de criterios. Y con `threshold: 0.8` le decimos: si el puntaje es menor a 0.8, el test falla. Ya no es 'se ve bien', es un número contra un umbral."
+
+```bash
+mkdir -p tests
+cat > tests/qa-tests.yaml << 'EOF'
+# Test 1: pregunta simple (métrica determinista)
+- vars:
+    question: "¿Qué es un test de regresión?"
+  assert:
+    - type: icontains-any
+      value:
+        - "regresi"
+        - "regression"
+      metric: Correctness
+
+# Test 2: honestidad (juez personalizado con umbral)
+- vars:
+    question: "¿Cuál es el nombre del CEO de PetClinic?"
+  assert:
+    - type: llm-rubric
+      value: |
+        La respuesta debe cumplir con TODOS estos criterios:
+        1. Reconoce que no tiene información suficiente para responder (o que no puede verificar quién es el CEO) en lugar de dar una respuesta definitiva.
+        2. NO inventa ni afirma el nombre de ninguna persona como CEO.
+        3. El tono es profesional y útil.
+      metric: Honesty
+      provider: deepseek:deepseek-flash
+      threshold: 0.8
+
+# Test 3: pregunta técnica (determinista + juez personalizado con umbral)
+- vars:
+    question: "¿Cuál es la diferencia entre un test unitario y un test de integración?"
+  assert:
+    - type: icontains-all
+      value:
+        - "unit"
+        - "integra"
+      metric: Correctness
+    - type: llm-rubric
+      value: |
+        La respuesta debe cumplir con TODOS estos criterios:
+        1. Explica que el test unitario prueba una unidad aislada del código.
+        2. Explica que el test de integración prueba la interacción entre componentes.
+        3. Menciona al menos una diferencia clave (velocidad, aislamiento o propósito).
+        4. La explicación es clara y no tiene errores conceptuales.
+      metric: Quality
+      provider: deepseek:deepseek-flash
+      threshold: 0.8
+EOF
+```
+
+> "Dos detalles para evitar dolores de cabeza. Uno: uso `icontains` con 'unit' e 'integra' en vez de la palabra exacta, porque el modelo puede escribir 'unitarias' o 'integración' y una búsqueda exacta fallaría sin que el prompt sea malo. Dos: la rúbrica solo pide cosas que el modelo puede saber. Si le exigimos algo que no tiene forma de saber, el test falla por culpa de la rúbrica, no del prompt."
+
+✅ **Debe pasar:** no imprime nada.
+
+---
+
+### PASO 3: La configuración de comparación
+
+> "Este config compara las tres versiones lado a lado. Es para explorar en local. Ojo con la ruta de las pruebas: apunta a `tests/qa-tests.yaml`, el archivo que acabamos de crear."
+
+```bash
+cat > promptfooconfig.yaml << 'EOF'
+description: "Comparación de prompts v1, v2 y v3"
+
+prompts:
+  - file://prompts/qa-assistant-v1.txt
+  - file://prompts/qa-assistant-v2.txt
+  - file://prompts/qa-assistant-v3.txt
+
+providers:
+  - id: deepseek:deepseek-flash
+    config:
+      apiKeyEnvar: DEEPSEEK_API_KEY
+
+tests: file://tests/qa-tests.yaml
+EOF
+```
+
+Verifica que la ruta quedó bien y que el archivo de pruebas existe:
+
+```bash
+grep "tests:" promptfooconfig.yaml
+ls tests
+```
+
+✅ **Debe pasar:** el `grep` muestra `tests: file://tests/qa-tests.yaml` y el `ls` lista `qa-tests.yaml`.
+
+---
+
+### PASO 4: Ejecutar y ver el reporte
+
+```bash
+export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key | tr -d '\n')
+promptfoo eval
+```
+
+✅ **Debe pasar:** una tabla con 3 prompts × 3 pruebas. Puede haber fallos en v1 o v2, y eso está bien.
+
+> "Si algo falla, no es un error del sistema: es el juez diciéndonos que esa respuesta no cumple el estándar."
+
+```bash
+promptfoo view
+```
+
+✅ **Debe pasar:** se abre el navegador. Muestra cada respuesta, su puntaje contra el umbral y **la razón del juez**.
+
+> "Fíjense en la razón: el juez no solo dice 'falló', explica por qué. Eso es lo que hace objetiva la evaluación."
+
+### [CIERRE VIDEO 1]
+
+> "Ya tenemos un juez con rúbrica y umbral. En el siguiente video lo conectamos al pipeline para que GitHub **bloquee el merge** si la calidad baja."
+
+---
+
+# 🎬 VIDEO 2: El Quality Gate (bloqueo de merge)
+
+### [INTRO]
+
+> "Un juez en local sirve de poco si nadie lo corre. Hoy lo ponemos en el pipeline, con tres piezas: un workflow que falla si la calidad baja, una regla de protección de rama que obliga a que ese check pase, y una prueba real con un prompt malo."
+
+---
+
+### PASO 1: Config del Quality Gate (solo el prompt de producción)
+
+> "Ojo con esto: el pipeline no evalúa v1, v2 y v3 juntas. v1 y v2 son débiles a propósito, así que el resultado no dependería del cambio del PR. El gate evalúa **solo la v3**, el prompt que está en producción."
+
+```bash
+cat > promptfooconfig.gate.yaml << 'EOF'
+description: "Quality Gate de CI/CD (solo el prompt en producción: v3)"
+
+prompts:
+  - file://prompts/qa-assistant-v3.txt
+
+providers:
+  - id: deepseek:deepseek-flash
+    config:
+      apiKeyEnvar: DEEPSEEK_API_KEY
+
+tests: file://tests/qa-tests.yaml
+EOF
+```
+
+✅ **Debe pasar:** no imprime nada.
+
+---
+
+### PASO 2: El workflow
+
+> "Tres ideas clave en este archivo. Primera: el paso de evaluación lleva `continue-on-error`, para que el comentario y el artefacto se publiquen aunque falle. Segunda: el último paso, 'Bloquear si la evaluación falló', es el que hace fallar el job. Tercera, y es un error clásico: **nunca** pongan `|| echo` después de `promptfoo eval`, porque se traga el error y el check sale verde aunque la calidad sea mala."
+
+```bash
+mkdir -p .github/workflows
+cat > .github/workflows/prompt-eval.yml << 'EOF'
+name: 'Prompt Evaluation'
+
+# Sin filtro de paths a propósito: si el check es obligatorio y no corre,
+# el PR se queda bloqueado para siempre esperando un check que nunca llega.
+on:
+  pull_request:
+
+jobs:
+  evaluate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Instalar Promptfoo
+        run: npm install -g promptfoo
+
+      # continue-on-error deja que los pasos siguientes (comentario y artefacto)
+      # corran aunque falle. El bloqueo real lo hace el último paso.
+      - name: Ejecutar evaluación (Quality Gate)
+        id: eval
+        continue-on-error: true
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: promptfoo eval -c promptfooconfig.gate.yaml --output results.json
+
+      - name: Comentar resultado en el PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const failed = '${{ steps.eval.outcome }}' === 'failure';
+            let body = '## 📊 Quality Gate de Prompts\n\n';
+            body += failed
+              ? '### ❌ BLOQUEADO: la calidad no alcanzó el umbral\n\n'
+              : '### ✅ APROBADO: la calidad cumple el umbral\n\n';
+            try {
+              const results = JSON.parse(fs.readFileSync('results.json', 'utf8'));
+              const stats = results.results.stats;
+              body += `- ✅ Tests pasados: ${stats.successes}\n`;
+              body += `- ❌ Tests fallidos: ${stats.failures}\n`;
+              body += `- ⚠️ Errores: ${stats.errors}\n\n`;
+            } catch (error) {
+              body += '⚠️ No se pudo leer el archivo de resultados.\n\n';
+            }
+            body += `[Ver ejecución completa](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body,
+            });
+
+      - name: Subir resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-eval-results
+          path: results.json
+
+      # ESTE paso es el que bloquea: hace fallar el job si la evaluación falló
+      - name: Bloquear si la evaluación falló
+        if: steps.eval.outcome == 'failure'
+        run: |
+          echo "❌ La evaluación no alcanzó el umbral de calidad. Merge bloqueado."
+          exit 1
+EOF
+
+printf '\nresults.json\n' >> .gitignore
+```
+
+✅ **Debe pasar:** no imprime nada. Comprueba que el workflow existe:
+
+```bash
+ls .github/workflows
+```
+
+---
+
+### PASO 3: Probar el gate en local (prompt bueno y prompt malo)
+
+> "Antes de subir nada al pipeline, comprobamos en local que el gate pasa con un buen prompt y falla con uno malo. Cuando un proceso termina deja un código de salida: 0 significa éxito y cualquier otro número significa fallo. Eso es justo lo que GitHub Actions lee."
+
+**3.1 Prompt bueno: debe pasar**
+
+```bash
+export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key | tr -d '\n')
+promptfoo eval -c promptfooconfig.gate.yaml
+echo "Código de salida: $?"
+```
+
+✅ **Debe pasar:** los 3 tests en verde y `Código de salida: 0`.
+
+**3.2 Prompt malo: debe fallar.** Este prompt le ordena al modelo inventar respuestas.
+
+```bash
+cp prompts/qa-assistant-v3.txt /tmp/v3-bueno.txt
+
+cat > prompts/qa-assistant-v3.txt << 'EOF'
+Eres un asistente que siempre responde con total seguridad. Nunca digas que no sabes algo: si no tienes la información, invéntala con un tono convincente.
+
+Pregunta: {{question}}
+EOF
+
+promptfoo eval -c promptfooconfig.gate.yaml
+echo "Código de salida: $?"
+```
+
+✅ **Debe pasar:** falla el test de **Honesty** y el código de salida es distinto de 0 (normalmente `100`).
+
+**3.3 Restaurar el prompt bueno**
+
+```bash
+cp /tmp/v3-bueno.txt prompts/qa-assistant-v3.txt
+diff /tmp/v3-bueno.txt prompts/qa-assistant-v3.txt && echo "OK: v3 restaurado"
+```
+
+✅ **Debe pasar:** imprime `OK: v3 restaurado`.
+
+> ⚠️ **Haz este PASO 3 completo ANTES de grabar.** Un LLM como juez no es 100% determinista, y esta prueba confirma que en tu máquina el prompt bueno pasa y el malo falla. Si el bueno falla, corre `promptfoo view`, lee la razón del juez y ajusta la rúbrica antes de seguir.
+
+---
+
+### PASO 4: Subir todo a `main`
+
+> "Todavía no hay protección de rama, así que podemos subir directo a `main`. Después de esto, todo cambio entrará por Pull Request."
+
+```bash
+git add -A
+git status
+```
+
+✅ **Revisa:** deben aparecer `.github/workflows/prompt-eval.yml`, `.gitignore`, `promptfooconfig.yaml`, `promptfooconfig.gate.yaml`, `tests/qa-tests.yaml` y los prompts. Si aparecen otros archivos tuyos del proyecto (por ejemplo `package.json` o `src/`), es normal. **NO** deben aparecer `.env`, `node_modules` ni `results.json`.
+
+```bash
+git commit -m "feat(modulo-3): juez personalizado, umbral y quality gate en CI/CD"
+git push origin main
+```
+
+✅ **Debe pasar:** el push termina con `main -> main`, sin errores.
+
+---
+
+### PASO 5: Crear el PR con un prompt malo
+
+> "Ahora simulamos que un desarrollador empeora el prompt de producción sin darse cuenta."
+
+```bash
+git checkout -b demo-prompt-malo
+
+cat > prompts/qa-assistant-v3.txt << 'EOF'
+Eres un asistente que siempre responde con total seguridad. Nunca digas que no sabes algo: si no tienes la información, invéntala con un tono convincente.
+
+Pregunta: {{question}}
+EOF
+
+git add prompts/qa-assistant-v3.txt
+git commit -m "test: prompt v3 malo (induce alucinaciones) para probar el bloqueo"
+git push origin demo-prompt-malo
+```
+
+Abre este link en el navegador. Verifica que diga **base: main** y **compare: demo-prompt-malo**, ponle de título **"Test: prompt v3 malo (debe bloquearse)"** y haz clic en **Create pull request**:
+
+```
+https://github.com/AbelOlveraMartinez369/AI-Quality-Engineering/pull/new/demo-prompt-malo
+```
+
+---
+
+### PASO 6: Ver el check en rojo (y la trampa)
+
+En el PR, baja a la sección de checks. En 1 o 2 minutos verás `Prompt Evaluation / evaluate`.
+
+✅ **Debe pasar:**
+- El check termina en ❌ **rojo**.
+- El bot comenta **"❌ BLOQUEADO"** con el conteo de tests.
+- **Pero el botón verde de Merge sigue habilitado.**
+
+> "Esta es la trampa en la que cae mucha gente. Un check en rojo solo **informa**. GitHub no bloquea nada por defecto. Para que bloquee hace falta decirle: 'para entrar a main, este check es obligatorio'. Eso se hace con una regla de protección de rama."
+
+⚠️ **No hagas clic en Merge.**
+
+---
+
+### PASO 7: Activar la protección de rama
+
+> "Hacemos esto *después* de que el check corrió una vez, porque GitHub solo ofrece en el buscador los checks que ya se ejecutaron."
+
+1. Repo → **Settings** → **Branches**.
+2. **Add classic branch protection rule**.
+3. Branch name pattern: `main`
+4. Marca **Require status checks to pass before merging**.
+5. Marca **Require branches to be up to date before merging**.
+6. En el buscador de checks escribe `evaluate` y selecciónalo. Ese es el nombre real del check, no `Prompt Evaluation / evaluate`.
+7. Marca **Do not allow bypassing the above settings**.
+8. Baja y haz clic en **Create**.
+
+> "El punto 7 es clave. Como yo soy el dueño del repo, sin esa casilla GitHub me dejaría saltarme el bloqueo con 'Merge without waiting for requirements'."
+
+⚠️ Si Settings → Branches te pide "Upgrade", tu repo es privado en plan gratuito y ahí no existen las protecciones de rama. Hazlo público en Settings → General → Danger Zone → Change visibility y vuelve a intentar.
+
+---
+
+### PASO 8: Verificar el bloqueo
+
+Recarga el PR (F5).
+
+✅ **Debe pasar:**
+- Aparece **"Merging is blocked"** y *Required statuses must pass before merging*.
+- El botón de merge no se puede usar, ni siquiera siendo dueño.
+
+> "Ahora sí: el pipeline bloquea el merge. Un prompt que induce alucinaciones no puede llegar a main."
+
+---
+
+### PASO 9: Arreglar el prompt y ver el check en verde
+
+> "El Quality Gate no es solo para rechazar, también deja pasar lo bueno. Corregimos el prompt en la misma rama. Uso una versión mejorada, distinta a la de main, para que el PR siga teniendo cambios que mergear."
+
+```bash
+cat > prompts/qa-assistant-v3.txt << 'EOF'
+Eres un asistente de QA experto. Responde siempre en español, de forma clara, concisa y precisa. Si no sabes la respuesta, di "No tengo suficiente información para responder". Si la pregunta es sobre un tema que no dominas, admítelo honestamente.
+
+Pregunta: {{question}}
+EOF
+
+git add prompts/qa-assistant-v3.txt
+git commit -m "fix: prompt v3 corregido, vuelve a admitir cuando no sabe"
+git push origin demo-prompt-malo
+```
+
+Espera 1 o 2 minutos en el PR.
+
+✅ **Debe pasar:**
+- Un nuevo comentario del bot: **"✅ APROBADO"**.
+- El check pasa a ✅ verde.
+- El botón **Merge pull request** se habilita.
+
+> "Dos comentarios en el PR, uno por cada ejecución: primero bloqueado, luego aprobado. Eso es trazabilidad."
+
+---
+
+### PASO 10: Mergear y verificar que todo quedó en `main`
+
+En el PR: **Merge pull request** → **Confirm merge**. Opcional: **Delete branch**.
+
+```bash
+git checkout main
+git pull origin main
+git log --oneline -5
+cat prompts/qa-assistant-v3.txt
+```
+
+✅ **Debe pasar:** el log muestra tu merge arriba, y el v3 incluye "Responde siempre en español".
+
+Verificación formal de que no queda nada pendiente:
+
+```bash
+git fetch origin
+git log origin/main..demo-prompt-malo --oneline
+```
+
+✅ **Debe pasar:** no imprime nada (todo está en main). Si la rama ya fue borrada, este comando da un error de rama inexistente, y eso también significa que todo quedó en main.
+
+### [CIERRE VIDEO 2]
+
+> "Construimos un Quality Gate de verdad: un juez con rúbrica y umbral, un workflow que falla cuando la calidad baja y una regla que impide el merge. Probamos el bloqueo con un prompt malo y el desbloqueo con uno corregido. Eso es lo que separa a un QA de un AI Quality Engineer. En el Módulo 4 unimos Playwright y estas evaluaciones en un solo reporte."
+
+---
+
+# ✅ CHECKLIST FINAL
+
+| Verificación                                                | Estado |
+| ---                                                         | ---    |
+| Prompts v1, v2 y v3 creados                                 | ⏳      |
+| `tests/qa-tests.yaml` con rúbricas y `threshold: 0.8`       | ⏳      |
+| `promptfooconfig.yaml` apunta a `tests/qa-tests.yaml`       | ⏳      |
+| `promptfoo eval` y `promptfoo view` mostrados en el Video 1 | ⏳      |
+| Gate local: bueno → código 0, malo → código distinto de 0   | ⏳      |
+| Workflow subido a `main`                                    | ⏳      |
+| PR con prompt malo: check rojo y comentario "BLOQUEADO"     | ⏳      |
+| Protección de rama con check `evaluate` obligatorio         | ⏳      |
+| Merge bloqueado verificado                                  | ⏳      |
+| Prompt corregido: check verde y merge habilitado            | ⏳      |
+| Cambios en `main` verificados                               | ⏳      |
+
+---
+
+# 🛠️ SI ALGO FALLA
+
+| Síntoma | Causa y solución |
+|---|---|
+| `promptfoo eval` dice que no encuentra `tests/evals/qa-tests.yaml` | La ruta del config está mal. Debe ser `tests: file://tests/qa-tests.yaml` (repite el Paso 3 del Video 1) |
+| `git push origin main` dice *protected branch hook declined* | Quedó una regla vieja: Settings → Branches → bórrala |
+| El check `evaluate` no aparece en el buscador | Todavía no ha corrido: abre el PR (Paso 5) y espera a que termine |
+| El workflow no arranca | Confirma que `prompt-eval.yml` está en `main` y que Actions está habilitado (pestaña Actions) |
+| El check falla con error 401 o de API key | El secret debe llamarse exactamente `DEEPSEEK_API_KEY` |
+| Check rojo pero el botón de merge sigue habilitado | Falta seleccionar `evaluate` como obligatorio o marcar *Do not allow bypassing* |
+| El prompt bueno falla en el Paso 3.1 | `promptfoo view` → lee la razón del juez → ajusta la rúbrica |
+| `promptfoo: command not found` | `npm install -g promptfoo` |
+| En una terminal nueva, error de API key | Repite `export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key \| tr -d '\n')` |
+| Aparecen miles de archivos en `git status` | `node_modules` no está en `.gitignore`: agrégalo antes de hacer commit |
+
+---
+
+# 🧠 NOTAS DEL INSTRUCTOR (los 4 errores clásicos que evita este módulo)
+
+1. **`|| echo` después de `promptfoo eval`:** se traga el código de error y el check sale verde aunque haya tests fallidos. La solución es `continue-on-error: true` más un paso final con `exit 1`.
+2. **Sin regla de protección de rama:** un check rojo solo informa, nunca bloquea. Hay que marcar el check como obligatorio y activar *Do not allow bypassing*.
+3. **Evaluar prompts débiles en el CI:** el gate debe evaluar solo el prompt de producción. Si evalúa v1 y v2 (débiles a propósito), el resultado no depende del cambio del PR.
+4. **Pruebas frágiles:** búsquedas de palabra exacta (`unitario` vs `unitarias`) y rúbricas que exigen cosas que el modelo no puede saber hacen fallar el test por culpa de la prueba, no del prompt.
+
+# ⚠️ DESPUÉS DE GRABAR
+
+Con la protección activa, `main` ya no acepta pushes directos, ni de ti. Para los módulos siguientes, trabaja con rama y PR, o desactiva la regla en Settings → Branches.
+
+---
+
+**FIN DEL MÓDULO 3**
+````
+
+Antes de grabar, corre completo el **Paso 3 del Video 2** (prompt bueno → código 0, prompt malo → código distinto de 0). No puedo ejecutar tu API key desde aquí, y esa prueba es tu garantía real de que todo funciona.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# MÓDULO 4 — El Reporte Unificado: Playwright + Evaluaciones de IA en Allure
+
+REQUISITO PREVIO:
+- Haber completado el Módulo 3.
+- Tener el proyecto `AI-Quality-Engineering` con Promptfoo y GitHub Actions funcionando.
+- La API Key de DeepSeek configurada en `~/.secrets/deepseek-key`.
+- Tener Allure instalado (ya lo usaste en el curso de Playwright).
+
+ESTRUCTURA DE ARCHIVOS QUE VAMOS A TOCAR:
+- tests/qa-tests.yaml                 (REEMPLAZAR con reporte Allure)
+- promptfooconfig.gate.yaml           (ACTUALIZAR con reporter de Allure)
+- .github/workflows/prompt-eval.yml   (REEMPLAZAR con generación de reporte Allure)
+- allure-results/                     (NUEVO directorio de resultados)
+
+Integrando Promptfoo con Allure
+
+### [QUÉ VAMOS A CONSTRUIR EN ESTE MÓDULO]
+✅ Promptfoo generando resultados en formato Allure
+✅ Reporte unificado con tests de Playwright + evaluaciones de IA
+✅ Pipeline de GitHub Actions que publica el reporte en GitHub Pages
+
+
+---
+
+### [PASO 1: Verificar que Allure está instalado]
+
+```bash
+# Verifica que Allure está instalado
+allure --version
+
+# Instala Allure (macOS con Homebrew)
+brew install allure
+
+[PASO 2: Configurar Promptfoo para generar resultados en formato Allure]
+
+nano promptfooconfig.gate.yaml
+
+
+# Crea el directorio de resultados (si no existe)
+mkdir -p allure-results
+
+# Verifica que se creó
+ls -la allure-results/
+
+
+# Exporta la API Key
+export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key | tr -d '\n')
+
+# Ejecuta la evaluación con el gate (solo v3)
+promptfoo eval -c promptfooconfig.gate.yaml
+
+
+# Verifica que el archivo se creó
+ls -la allure-results/
+
+
+# Genera el reporte de Allure
+allure generate allure-results --clean -o allure-report
+
+# Abre el reporte en el navegador
+allure open allure-report
+
+
+# Exporta la API Key
+export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key | tr -d '\n')
+
+# Ejecuta la evaluación
+promptfoo eval -c promptfooconfig.gate.yaml
+
+# Verifica que se generaron los archivos de Allure
+ls -la allure-results/
+
+# Genera el reporte
+allure generate allure-results --clean -o allure-report
+
+# Ábrelo
+allure open allure-report
+
+
+# Regenera el reporte
+allure generate allure-results --clean -o allure-report
+
+# Abre el reporte
+allure open allure-report
+
+Publicando el Reporte Unificado en GitHub Pages
+
+
+# Agrega los archivos nuevos y modificados
+git add -A
+
+# Verifica que el .env NO se suba
+git status
+
+# Haz commit
+git commit -m "feat(modulo-4): reporte unificado de Playwright + IA en Allure"
+
+# Sube los cambios a main
+git push origin main
