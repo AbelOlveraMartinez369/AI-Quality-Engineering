@@ -1,7 +1,5 @@
 name: 'Prompt Evaluation'
 
-# Sin filtro de paths a propósito: si el check es obligatorio y no corre,
-# el PR se queda bloqueado para siempre esperando un check que nunca llega.
 on:
   pull_request:
 
@@ -9,8 +7,10 @@ jobs:
   evaluate:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
       pull-requests: write
+      pages: write
+      id-token: write
     steps:
       - name: Checkout código
         uses: actions/checkout@v4
@@ -23,34 +23,63 @@ jobs:
       - name: Instalar Promptfoo
         run: npm install -g promptfoo
 
-      # continue-on-error deja que los pasos siguientes (comentario y artefacto)
-      # corran aunque falle. El bloqueo real lo hace el último paso.
+      - name: Instalar Allure
+        run: npm install -g allure-commandline
+
+      # Crea el directorio de resultados de Allure
+      - name: Crear directorio de resultados
+        run: mkdir -p allure-results
+
+      # Ejecuta la evaluación. El script allure-reporter.js (declarado en
+      # promptfooconfig.gate.yaml) genera los archivos *-result.json que Allure lee.
       - name: Ejecutar evaluación (Quality Gate)
         id: eval
         continue-on-error: true
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
-        run: promptfoo eval -c promptfooconfig.gate.yaml --output results.json
+        run: promptfoo eval -c promptfooconfig.gate.yaml
 
+      # Genera el reporte de Allure a partir de los *-result.json
+      - name: Generar reporte de Allure
+        if: always()
+        run: allure generate allure-results --clean -o allure-report
+
+      # Publica el reporte en GitHub Pages
+      - name: Publicar en GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./allure-report
+
+      # Comenta el resultado en el PR (lee todos los *-result.json)
       - name: Comentar resultado en el PR
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
+            const path = require('path');
             const failed = '${{ steps.eval.outcome }}' === 'failure';
             let body = '## 📊 Quality Gate de Prompts\n\n';
             body += failed
               ? '### ❌ BLOQUEADO: la calidad no alcanzó el umbral\n\n'
               : '### ✅ APROBADO: la calidad cumple el umbral\n\n';
             try {
-              const results = JSON.parse(fs.readFileSync('results.json', 'utf8'));
-              const stats = results.results.stats;
-              body += `- ✅ Tests pasados: ${stats.successes}\n`;
-              body += `- ❌ Tests fallidos: ${stats.failures}\n`;
-              body += `- ⚠️ Errores: ${stats.errors}\n\n`;
+              // Lee todos los archivos *-result.json generados por el script
+              const dir = 'allure-results';
+              const files = fs.readdirSync(dir).filter(f => f.endsWith('-result.json'));
+              let passed = 0, failedCount = 0;
+              for (const f of files) {
+                const data = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+                if (data.status === 'passed') passed++;
+                else if (data.status === 'failed') failedCount++;
+              }
+              body += `- ✅ Tests pasados: ${passed}\n`;
+              body += `- ❌ Tests fallidos: ${failedCount}\n\n`;
             } catch (error) {
-              body += '⚠️ No se pudo leer el archivo de resultados.\n\n';
+              body += '⚠️ No se pudieron leer los resultados de Allure.\n\n';
             }
             body += `[Ver ejecución completa](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
             await github.rest.issues.createComment({
@@ -60,14 +89,15 @@ jobs:
               body: body,
             });
 
+      # Sube los resultados como artefacto
       - name: Subir resultados
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: prompt-eval-results
-          path: results.json
+          path: allure-results/
 
-      # ESTE paso es el que bloquea: hace fallar el job si la evaluación falló
+      # Bloquea el merge si la evaluación falló
       - name: Bloquear si la evaluación falló
         if: steps.eval.outcome == 'failure'
         run: |

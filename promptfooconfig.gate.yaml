@@ -9,3 +9,7 @@ providers:
       apiKeyEnvar: DEEPSEEK_API_KEY
 
 tests: file://tests/evals/qa-tests.yaml
+
+# 🆕 CRÍTICO: Ejecuta el script de conversión al terminar la evaluación
+extensions:
+  - file://scripts/allure-reporter.js:afterAll
