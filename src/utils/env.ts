@@ -1,24 +1,24 @@
 // Importa el módulo fs para leer archivos del sistema
 import fs from 'fs';
-// Importa path para construir rutas de archivos de forma segura
-import path from 'path';
 // Importa dotenv para cargar las variables del archivo .env
 import dotenv from 'dotenv';
 
-// Carga las variables de entorno desde el archivo .env
+// Carga las variables del archivo .env (si no existe, como en CI, no pasa nada)
 dotenv.config();
 
-// Lee la ruta del archivo que contiene la API Key desde el .env
-const apiKeyFile = process.env.DEEPSEEK_API_KEY_FILE;
+// Solo busca el archivo secreto si la API key NO está ya en el entorno
+if (!process.env.DEEPSEEK_API_KEY) {
+  // Lee la ruta del archivo que contiene la API key
+  const apiKeyFile = process.env.DEEPSEEK_API_KEY_FILE;
 
-// Verifica que la variable exista
-if (!apiKeyFile) {
-  // Si no existe, lanza un error claro
-  throw new Error('Falta DEEPSEEK_API_KEY_FILE en el archivo .env');
+  // Si tampoco hay ruta, falla con un mensaje claro
+  if (!apiKeyFile) {
+    throw new Error('Falta DEEPSEEK_API_KEY o DEEPSEEK_API_KEY_FILE (revisa tu .env)');
+  }
+
+  // Reemplaza el ~ inicial por la carpeta home del usuario
+  const resolvedPath = apiKeyFile.replace(/^~/, process.env.HOME || '');
+
+  // Lee el archivo, quita espacios o saltos de línea y lo guarda en el entorno
+  process.env.DEEPSEEK_API_KEY = fs.readFileSync(resolvedPath, 'utf-8').trim();
 }
-
-// Resuelve la ruta absoluta del archivo (reemplaza ~ por el home del usuario)
-const resolvedPath = apiKeyFile.replace('~', process.env.HOME || '');
-
-// Lee el contenido del archivo y lo pone en process.env.DEEPSEEK_API_KEY
-process.env.DEEPSEEK_API_KEY = fs.readFileSync(resolvedPath, 'utf-8').trim();

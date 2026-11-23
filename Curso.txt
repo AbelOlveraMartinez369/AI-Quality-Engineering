@@ -1696,25 +1696,44 @@ Antes de grabar, corre completo el **Paso 3 del Video 2** (prompt bueno → cód
 
 # MÓDULO 4 — El Reporte Unificado: Playwright + Evaluaciones de IA en Allure
 
+Abel, aquí tienes el **Módulo 4 completo y definitivo**, con todas las correcciones aplicadas (el script `allure-reporter.js`, el workflow sin `--output`, y el comentario del PR que lee los `*-result.json`). Listo para copiar y pegar en tu archivo maestro.
+
+---
+
+```markdown
+# MÓDULO 4 — El Reporte Unificado: Playwright + Evaluaciones de IA en Allure
+## Curso: AI Quality Engineering — Del Prompt al Pipeline
+
 REQUISITO PREVIO:
 - Haber completado el Módulo 3.
 - Tener el proyecto `AI-Quality-Engineering` con Promptfoo y GitHub Actions funcionando.
-- La API Key de DeepSeek configurada en `~/.secrets/deepseek-key`.
-- Tener Allure instalado (ya lo usaste en el curso de Playwright).
+- La API Key de DeepSeek configurada en `~/.secrets/deepseek-key` y en los Secrets de GitHub.
+- Tener Allure instalado (`brew install allure` o `npm install -g allure-commandline`).
 
 ESTRUCTURA DE ARCHIVOS QUE VAMOS A TOCAR:
-- tests/qa-tests.yaml                 (REEMPLAZAR con reporte Allure)
-- promptfooconfig.gate.yaml           (ACTUALIZAR con reporter de Allure)
-- .github/workflows/prompt-eval.yml   (REEMPLAZAR con generación de reporte Allure)
-- allure-results/                     (NUEVO directorio de resultados)
+- scripts/allure-reporter.js        (NUEVO)
+- promptfooconfig.gate.yaml         (ACTUALIZAR con extensions)
+- .github/workflows/prompt-eval.yml (REEMPLAZAR con generación de Allure)
 
-Integrando Promptfoo con Allure
+
+# VIDEO 1 (Módulo 4) — Integrando Promptfoo con Allure
+## Módulo 4: El Reporte Unificado
+
+---
+
+### [INTRO]
+
+> **"Chicos, en los módulos anteriores construimos un sistema de evaluación de IA con Promptfoo. Pero tenemos un problema: los resultados viven en una herramienta separada de Allure, que es donde ya tienes los tests de Playwright. Hoy vamos a unificar todo en un solo reporte. Un solo lugar para ver la calidad de la UI, la API y la IA."**
+
+---
 
 ### [QUÉ VAMOS A CONSTRUIR EN ESTE MÓDULO]
+
+```
 ✅ Promptfoo generando resultados en formato Allure
 ✅ Reporte unificado con tests de Playwright + evaluaciones de IA
 ✅ Pipeline de GitHub Actions que publica el reporte en GitHub Pages
-
+```
 
 ---
 
@@ -1723,64 +1742,426 @@ Integrando Promptfoo con Allure
 ```bash
 # Verifica que Allure está instalado
 allure --version
+```
 
+Si no está instalado, instálalo:
+
+```bash
 # Instala Allure (macOS con Homebrew)
 brew install allure
+```
 
-[PASO 2: Configurar Promptfoo para generar resultados en formato Allure]
+---
 
+### [PASO 2: Crear el script de conversión (allure-reporter.js)]
+
+> **"Chicos, este es el puente entre Promptfoo y Allure. Promptfoo no genera resultados en el formato nativo de Allure, así que necesitamos un script que convierta sus resultados al formato que Allure espera. Ese script se ejecuta automáticamente al terminar la evaluación, gracias al hook `afterAll` de Promptfoo."**
+
+```bash
+# Crea la carpeta de scripts
+mkdir -p scripts
+
+# Crea el archivo del reporter
+nano scripts/allure-reporter.js
+```
+
+Pega esto **exactamente**:
+
+```javascript
+// Importa el módulo fs para escribir archivos
+const fs = require('fs');
+// Importa path para construir rutas
+const path = require('path');
+// Importa crypto para generar UUIDs únicos
+const crypto = require('crypto');
+
+// Exporta el hook afterAll que Promptfoo ejecutará al terminar
+module.exports = {
+  // Función que recibe el contexto de la evaluación
+  afterAll: async (context) => {
+    // Define el directorio de salida de Allure
+    const allureDir = path.resolve('allure-results');
+    // Crea el directorio si no existe
+    if (!fs.existsSync(allureDir)) fs.mkdirSync(allureDir, { recursive: true });
+
+    // Itera sobre cada resultado de la evaluación
+    for (const result of context.results) {
+      // Genera un UUID único para este resultado
+      const uuid = crypto.randomUUID();
+      // Extrae el nombre del test (la pregunta)
+      const testName = result.testCase?.vars?.question || 'Prompt evaluation';
+      // Determina el estado: passed si el test pasó, failed si no
+      const status = result.success ? 'passed' : 'failed';
+      // Extrae la razón del fallo si existe
+      const statusMessage = result.gradingResult?.reason || '';
+
+      // Construye el objeto con el formato que Allure espera
+      const allureResult = {
+        // UUID único del resultado
+        uuid: uuid,
+        // Nombre del test que se mostrará en el reporte
+        name: testName,
+        // Nombre completo (usado para historial)
+        fullName: `Promptfoo.${testName}`,
+        // Estado del test (passed/failed)
+        status: status,
+        // Detalles del estado (mensaje de error o razón)
+        statusDetails: {
+          // Mensaje que explica por qué pasó o falló
+          message: statusMessage,
+        },
+        // Etapa en la que terminó el test
+        stage: 'finished',
+        // Timestamp de inicio (ahora menos la latencia)
+        start: Date.now() - (result.latencyMs || 0),
+        // Timestamp de fin (ahora)
+        stop: Date.now(),
+        // Etiquetas para organizar en el reporte
+        labels: [
+          // Etiqueta de suite
+          { name: 'suite', value: 'Quality Gate de IA' },
+          // Etiqueta de capa
+          { name: 'layer', value: 'ai-evals' },
+          // Etiqueta del proveedor evaluado
+          { name: 'provider', value: result.provider?.id || 'unknown' },
+        ],
+      };
+
+      // Escribe el archivo con el nombre que Allure espera: {uuid}-result.json
+      fs.writeFileSync(
+        path.join(allureDir, `${uuid}-result.json`),
+        JSON.stringify(allureResult, null, 2)
+      );
+    }
+
+    // Imprime en consola cuántos resultados se generaron
+    console.log(`✅ Generados ${context.results.length} resultados para Allure en ${allureDir}`);
+  },
+};
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+**Explicación línea por línea:**
+
+- `module.exports = { afterAll: ... }`: Define el hook que Promptfoo ejecutará al terminar la evaluación.
+- `allureDir`: La carpeta donde Allure lee los resultados (`allure-results/`).
+- `context.results`: El array con los resultados de cada test de Promptfoo.
+- `uuid`: Un identificador único para cada archivo (Allure lo requiere).
+- `testName`: El nombre del test (la pregunta del caso de prueba).
+- `status`: `'passed'` si el test pasó, `'failed'` si no.
+- `allureResult`: El objeto con el formato que Allure espera (uuid, name, status, labels, etc.).
+- `fs.writeFileSync`: Escribe el archivo `{uuid}-result.json` en `allure-results/`. **Ese sufijo `-result.json` es crítico**: Allure solo lee archivos con esa nomenclatura.
+
+---
+
+### [PASO 3: Actualizar el `promptfooconfig.gate.yaml` con el hook]
+
+```bash
+# Abre el archivo de configuración del gate
 nano promptfooconfig.gate.yaml
+```
 
+Pega esto **exactamente**:
 
+```yaml
+# Descripción del Quality Gate
+description: "Quality Gate de CI/CD (solo el prompt en producción: v3)"
+
+# Prompt que se va a evaluar
+prompts:
+  - file://prompts/qa-assistant-v3.txt
+
+# Proveedor (DeepSeek)
+providers:
+  - id: deepseek:deepseek-flash
+    config:
+      apiKeyEnvar: DEEPSEEK_API_KEY
+
+# Tests compartidos (los mismos del Módulo 3)
+tests: file://tests/qa-tests.yaml
+
+# 🆕 CRÍTICO: Ejecuta el script de conversión al terminar la evaluación
+# Esto genera los archivos *-result.json que Allure necesita
+extensions:
+  - file://scripts/allure-reporter.js:afterAll
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+**Explicación:** `extensions` le dice a Promptfoo que cargue el script `allure-reporter.js` y ejecute su hook `afterAll` al terminar. Sin esto, Allure no verá ningún resultado.
+
+---
+
+### [PASO 4: Crear el directorio de resultados de Allure]
+
+```bash
 # Crea el directorio de resultados (si no existe)
 mkdir -p allure-results
 
 # Verifica que se creó
 ls -la allure-results/
+```
 
+---
 
+### [PASO 5: Ejecutar la evaluación y generar los archivos de Allure]
+
+```bash
 # Exporta la API Key
 export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key | tr -d '\n')
 
 # Ejecuta la evaluación con el gate (solo v3)
 promptfoo eval -c promptfooconfig.gate.yaml
+```
 
+**¿Qué debe pasar?**
 
-# Verifica que el archivo se creó
+Verás la tabla de resultados como siempre. Pero además, el script `allure-reporter.js` habrá generado archivos `*-result.json` en `allure-results/`:
+
+```bash
+# Verifica que los archivos se crearon
 ls -la allure-results/
+```
 
+Debe mostrar archivos como `a1b2c3d4-...-result.json`.
 
+---
+
+### [PASO 6: Generar y abrir el reporte de Allure]
+
+```bash
 # Genera el reporte de Allure
 allure generate allure-results --clean -o allure-report
 
 # Abre el reporte en el navegador
 allure open allure-report
+```
 
+**¿Qué debe pasar?**
 
-# Exporta la API Key
-export DEEPSEEK_API_KEY=$(cat ~/.secrets/deepseek-key | tr -d '\n')
+Se abre una ventana en tu navegador con el reporte de Allure. Deberías ver:
+- Los tests de evaluación de IA (los 3 tests del gate) en la sección de **Suites**.
+- Cada test con su estado (Pass/Fail).
+- Si un test falló, la razón del juez (por qué no cumplió el umbral).
+- La etiqueta **Quality Gate de IA** en cada test.
 
-# Ejecuta la evaluación
-promptfoo eval -c promptfooconfig.gate.yaml
+> **"Este es el poder del reporte unificado. En un solo lugar, puedes ver si la UI funciona (Playwright), si la API responde (Playwright), y si la IA es honesta (Promptfoo). Eso es lo que un stakeholder necesita para tomar decisiones."**
 
-# Verifica que se generaron los archivos de Allure
-ls -la allure-results/
+---
 
-# Genera el reporte
-allure generate allure-results --clean -o allure-report
+### [PASO 7: Verificar el reporte con un test simulado de Playwright]
 
-# Ábrelo
-allure open allure-report
+> **"Chicos, para que vean el poder real de esto, vamos a simular que también tienes tests de Playwright. Vamos a crear un archivo de resultados de ejemplo y mezclarlo con el de Promptfoo. Ojo con la nomenclatura: Allure solo lee archivos que terminan en `-result.json`."**
 
+```bash
+# Crea un archivo de resultados de Allure simulado (como si fuera de Playwright)
+cat > allure-results/playwright-example-result.json << 'EOF'
+{
+  "name": "test de ejemplo de Playwright",
+  "status": "passed",
+  "statusDetails": {
+    "message": "Test de UI que pasó correctamente"
+  },
+  "stage": "finished",
+  "start": 1700000000000,
+  "stop": 1700000001000,
+  "uuid": "example-playwright-test-uuid",
+  "historyId": "example-playwright-history",
+  "labels": [
+    { "name": "suite", "value": "UI Tests" },
+    { "name": "tag", "value": "@ui" }
+  ]
+}
+EOF
+```
 
+> ⚠️ **CRÍTICO:** El archivo debe terminar en `-result.json`. Si lo nombras `playwright-example.json`, Allure lo ignorará.
+
+```bash
 # Regenera el reporte
 allure generate allure-results --clean -o allure-report
 
 # Abre el reporte
 allure open allure-report
+```
 
-Publicando el Reporte Unificado en GitHub Pages
+**¿Qué debe pasar?**
 
+En el reporte de Allure, verás dos secciones:
+- **Quality Gate de IA** (los tests de Promptfoo).
+- **UI Tests** (el test simulado de Playwright).
+
+Ambos en el mismo reporte, con sus estados y detalles.
+
+---
+
+### [CIERRE DEL VIDEO 1]
+
+> **"Acaban de unificar dos mundos: Playwright y la evaluación de IA. Ya no tienes que ir a dos herramientas diferentes para saber si todo está bien. Un solo reporte, una sola vista, una sola fuente de verdad."**
+
+> **"En el próximo video, vamos a llevar esto a GitHub Actions: el pipeline generará el reporte de Allure y lo publicará en GitHub Pages, para que cualquier persona del equipo pueda verlo sin instalar nada."**
+
+---
+
+# VIDEO 2 (Módulo 4) — Publicando el Reporte Unificado en GitHub Pages
+## Módulo 4: El Reporte Unificado
+
+---
+
+### [INTRO]
+
+> **"Chicos, ya tenemos el reporte unificado en local. Pero el verdadero valor está en que el pipeline lo genere automáticamente y lo publique en GitHub Pages. Así, cada vez que alguien haga un Pull Request, el equipo podrá ver el reporte completo sin instalar nada."**
+
+---
+
+### [PASO 1: Actualizar el workflow de GitHub Actions]
+
+> **"Chicos, el workflow del Módulo 3 solo ejecutaba la evaluación y bloqueaba el merge. Ahora vamos a agregar dos pasos: generar el reporte de Allure y publicarlo en GitHub Pages. Y lo más importante: **quitamos el `--output`**, porque el script `allure-reporter.js` ya genera los archivos de Allure directamente."**
+
+```bash
+# Abre el archivo del workflow
+nano .github/workflows/prompt-eval.yml
+```
+
+Pega esto **exactamente**:
+
+```yaml
+# Nombre del workflow
+name: 'Prompt Evaluation'
+
+# Se dispara en cada Pull Request
+on:
+  pull_request:
+
+# Define los jobs
+jobs:
+  evaluate:
+    # Corre en Ubuntu
+    runs-on: ubuntu-latest
+    # Permisos para comentar en el PR y publicar en Pages
+    permissions:
+      contents: write
+      pull-requests: write
+      pages: write
+      id-token: write
+    steps:
+      # Descarga el código
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      # Configura Node.js
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # Instala Promptfoo
+      - name: Instalar Promptfoo
+        run: npm install -g promptfoo
+
+      # Instala Allure
+      - name: Instalar Allure
+        run: npm install -g allure-commandline
+
+      # Crea el directorio de resultados de Allure
+      - name: Crear directorio de resultados
+        run: mkdir -p allure-results
+
+      # Ejecuta la evaluación. El script allure-reporter.js (declarado en
+      # promptfooconfig.gate.yaml) genera los archivos *-result.json que Allure lee.
+      # 🆕 CRÍTICO: NO usamos --output, porque el script ya genera los archivos.
+      - name: Ejecutar evaluación (Quality Gate)
+        id: eval
+        continue-on-error: true
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+        run: promptfoo eval -c promptfooconfig.gate.yaml
+
+      # Genera el reporte de Allure a partir de los *-result.json
+      - name: Generar reporte de Allure
+        if: always()
+        run: allure generate allure-results --clean -o allure-report
+
+      # Publica el reporte en GitHub Pages
+      - name: Publicar en GitHub Pages
+        if: always()
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_branch: gh-pages
+          publish_dir: ./allure-report
+
+      # Comenta el resultado en el PR (lee todos los *-result.json)
+      - name: Comentar resultado en el PR
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const failed = '${{ steps.eval.outcome }}' === 'failure';
+            let body = '## 📊 Quality Gate de Prompts\n\n';
+            body += failed
+              ? '### ❌ BLOQUEADO: la calidad no alcanzó el umbral\n\n'
+              : '### ✅ APROBADO: la calidad cumple el umbral\n\n';
+            try {
+              // Lee todos los archivos *-result.json generados por el script
+              const dir = 'allure-results';
+              const files = fs.readdirSync(dir).filter(f => f.endsWith('-result.json'));
+              let passed = 0, failedCount = 0;
+              for (const f of files) {
+                const data = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+                if (data.status === 'passed') passed++;
+                else if (data.status === 'failed') failedCount++;
+              }
+              body += `- ✅ Tests pasados: ${passed}\n`;
+              body += `- ❌ Tests fallidos: ${failedCount}\n\n`;
+            } catch (error) {
+              body += '⚠️ No se pudieron leer los resultados de Allure.\n\n';
+            }
+            body += `[Ver ejecución completa](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})\n`;
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body,
+            });
+
+      # Sube los resultados como artefacto (para descargar)
+      - name: Subir resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prompt-eval-results
+          path: allure-results/
+
+      # Bloquea el merge si la evaluación falló
+      - name: Bloquear si la evaluación falló
+        if: steps.eval.outcome == 'failure'
+        run: |
+          echo "❌ La evaluación no alcanzó el umbral de calidad. Merge bloqueado."
+          exit 1
+```
+
+Guarda (`Ctrl + O`, `Enter`, `Ctrl + X`).
+
+**Explicación de los cambios:**
+
+- **`promptfoo eval -c promptfooconfig.gate.yaml`**: Sin `--output`. El script `allure-reporter.js` ya genera los archivos de Allure.
+- **`allure generate`**: Genera el reporte visual de Allure a partir de los `*-result.json`.
+- **`peaceiris/actions-gh-pages@v4`**: Publica el reporte en la rama `gh-pages`.
+- **Comentario del PR**: Lee todos los `*-result.json` y cuenta cuántos pasaron y cuántos fallaron.
+
+---
+
+### [PASO 2: Hacer commit y subir los cambios]
+
+> **"Chicos, recuerden que `main` está protegido. No podemos hacer push directo. Tenemos que hacerlo por una rama y un Pull Request."**
+
+```bash
+# Crea una rama nueva
+git checkout -b feature/reporte-unificado
 
 # Agrega los archivos nuevos y modificados
 git add -A
@@ -1791,5 +2172,159 @@ git status
 # Haz commit
 git commit -m "feat(modulo-4): reporte unificado de Playwright + IA en Allure"
 
-# Sube los cambios a main
-git push origin main
+# Sube la rama
+git push origin feature/reporte-unificado
+```
+
+---
+
+### [PASO 3: Crear el Pull Request en GitHub]
+
+1. Ve a tu repositorio en GitHub
+2. Verás un banner que dice "feature/reporte-unificado had recent pushes"
+3. Haz clic en **Compare & pull request**
+4. Título: "Feat: reporte unificado de Playwright + IA en Allure"
+5. Haz clic en **Create pull request**
+
+**¿Qué debe pasar?**
+
+- El workflow **"Prompt Evaluation"** se dispara automáticamente.
+- En la pestaña **Actions**, verás el workflow corriendo.
+- Cuando termine, verás:
+  - El check `Prompt Evaluation / evaluate` en **verde** (si el prompt v3 pasa el umbral).
+  - Un **comentario automático** con el resumen de resultados y un enlace al reporte de Allure.
+  - El reporte de Allure publicado en `gh-pages`.
+
+---
+
+### [PASO 4: Ver el reporte en GitHub Pages]
+
+Una vez que el workflow termine:
+
+1. Ve a **Settings → Pages** de tu repositorio.
+2. Verás un mensaje como: *"Your site is live at https://abelolveramartinez369.github.io/AI-Quality-Engineering/"*.
+3. Abre ese enlace.
+
+**¿Qué debe pasar?**
+
+Se abre el reporte de Allure con:
+- Los tests de evaluación de IA (los 3 tests del gate).
+- Cada test con su estado y detalles.
+- Si el prompt modificado pasó el umbral, verás todo en verde.
+
+> **"Este es el reporte unificado. Cualquier persona del equipo puede entrar a esta URL y ver el estado de la calidad de la IA sin instalar nada. Y si en el futuro agregas tests de Playwright a este mismo pipeline, aparecerán en el mismo reporte."**
+
+---
+
+### [PASO 5: Verificar que el bloqueo del merge sigue funcionando]
+
+> **"Chicos, el Quality Gate del Módulo 3 sigue funcionando. Si el prompt modificado no pasa el umbral, el merge se bloquea. El reporte de Allure es un complemento, no un reemplazo."**
+
+Si el check está en rojo, el botón de merge estará bloqueado. Si está en verde, el merge se habilita.
+
+---
+
+### [PASO 6: Mergear el Pull Request]
+
+Si el check `evaluate` está en **verde**:
+
+1. Haz clic en **Merge pull request**
+2. Haz clic en **Confirm merge**
+3. Opcional: **Delete branch**
+
+---
+
+### [CIERRE DEL VIDEO 2]
+
+> **"Chicos, acaban de construir el pipeline de calidad más completo que existe: Playwright para la UI, Promptfoo para la IA, Allure para el reporte unificado, y GitHub Actions para la automatización. Eso es lo que separa a un QA de un AI Quality Engineer."**
+
+> **"En el próximo módulo, vamos a agregar la capa de observabilidad: monitorear la calidad de la IA en producción, no solo en el pipeline."**
+
+---
+
+# RESUMEN DEL MÓDULO 4
+
+```
+✅ Script de conversión (allure-reporter.js) que genera archivos *-result.json
+✅ Promptfoo configurado con extensions para ejecutar el script
+✅ Reporte unificado con tests de Playwright + evaluaciones de IA
+✅ Pipeline de GitHub Actions que publica el reporte en GitHub Pages
+✅ Quality Gate con bloqueo de merge (se mantiene del Módulo 3)
+```
+
+---
+
+### [CHECKLIST DEL MÓDULO 4]
+
+| Verificación                                                                      | Estado |
+| ---                                                                               | ---    |
+| `scripts/allure-reporter.js` creado con el hook `afterAll`                        | ⏳      |
+| `promptfooconfig.gate.yaml` con `extensions` apuntando al script                  | ⏳      |
+| `promptfoo eval` ejecutado y archivos `*-result.json` generados                   | ⏳      |
+| `allure generate` ejecutado y reporte con tests visibles                          | ⏳      |
+| Archivo de Playwright renombrado a `*-result.json` y visible en el reporte        | ⏳      |
+| Workflow de GitHub Actions actualizado (sin `--output`, con generación de Allure) | ⏳      |
+| Push a `main` rechazado por protección de rama (correcto)                         | ⏳      |
+| Rama `feature/reporte-unificado` creada y subida                                  | ⏳      |
+| Pull Request creado en GitHub                                                     | ⏳      |
+| Workflow ejecutado y check `evaluate` en verde/rojo                               | ⏳      |
+| Reporte de Allure publicado en GitHub Pages                                       | ⏳      |
+| Merge del PR completado                                                           | ⏳      |
+
+---
+
+**FIN DEL MÓDULO 4**
+```
+
+---
+
+Ahí lo tienes, Abel. **Un solo bloque, completo, con todas las correcciones aplicadas.** Guárdalo en tu archivo maestro del curso, y cuando estés listo, empezamos con el Módulo 5. 🚀
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# MÓDULO 5 — Observabilidad: Monitoreando la Calidad de la IA en Producción
+
+Sin observabilidad:
+  Usuario: "La IA me dio una respuesta rara"
+  Tú:      "No sé qué pasó, no tengo logs"
+
+Con observabilidad:
+  Usuario: "La IA me dio una respuesta rara"
+  Tú:      "Déjame ver el trace: prompt exacto, respuesta exacta,
+            tokens, latencia y la calificación del juez"
+
+
+Instalando Opik y configurando el SDK
+
+cd ~
+
+git clone --depth 1 https://github.com/comet-ml/opik.git opik-local
+
+./opik.sh --stop
+
+./opik.sh
+
+./opik.sh --clean

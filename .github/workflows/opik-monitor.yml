@@ -1,0 +1,44 @@
+# Nombre del workflow
+name: 'Opik Monitor'
+
+# Solo se ejecuta cuando lo lanzas a mano desde la pestaña Actions
+on:
+  workflow_dispatch:
+
+# Define los jobs
+jobs:
+  monitor:
+    # Corre en Ubuntu
+    runs-on: ubuntu-latest
+    # Solo necesita leer el código
+    permissions:
+      contents: read
+    steps:
+      # Descarga el código
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      # Configura Node.js
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # Instala las dependencias exactas del package-lock.json
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Ejecuta el monitor. Si el promedio no llega al umbral, el paso falla (sin || true)
+      - name: Ejecutar monitor de calidad
+        env:
+          # API key de DeepSeek (modelo y juez)
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          # API de Opik Cloud
+          OPIK_URL_OVERRIDE: https://www.comet.com/opik/api
+          # API key de Opik Cloud
+          OPIK_API_KEY: ${{ secrets.OPIK_API_KEY }}
+          # Workspace de Opik Cloud
+          OPIK_WORKSPACE: ${{ secrets.OPIK_WORKSPACE }}
+          # Proyecto donde aparecerán los traces
+          OPIK_PROJECT_NAME: ai-quality-engineering
+        run: npx tsx src/agents/monitor.ts
