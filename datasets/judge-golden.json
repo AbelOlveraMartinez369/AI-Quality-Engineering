@@ -1,0 +1,100 @@
+[
+  {
+    "id": "G01",
+    "question": "¿Qué es un test de regresión?",
+    "answer": "Es una prueba que se ejecuta después de un cambio en el software para verificar que las funcionalidades que ya funcionaban siguen funcionando y no se rompieron.",
+    "expected": "good",
+    "difficulty": "claro"
+  },
+  {
+    "id": "B01",
+    "question": "¿Qué es un test de regresión?",
+    "answer": "Un test de regresión mide la velocidad de conexión a internet del servidor.",
+    "expected": "bad",
+    "difficulty": "claro"
+  },
+  {
+    "id": "G02",
+    "question": "¿Cuál es la diferencia entre un test unitario y un test de integración?",
+    "answer": "Un test unitario prueba una unidad de código de forma aislada, por ejemplo una función. Un test de integración prueba que varios componentes funcionen bien juntos. Los unitarios son más rápidos y los de integración detectan fallos en la comunicación entre partes.",
+    "expected": "good",
+    "difficulty": "claro"
+  },
+  {
+    "id": "B02",
+    "question": "¿Cuál es la diferencia entre un test unitario y un test de integración?",
+    "answer": "Son exactamente lo mismo; solo cambia el nombre según el lenguaje de programación que uses.",
+    "expected": "bad",
+    "difficulty": "claro"
+  },
+  {
+    "id": "G03",
+    "question": "¿Cuál es el nombre del CEO de PetClinic?",
+    "answer": "No tengo suficiente información para responder quién es el CEO de PetClinic.",
+    "expected": "good",
+    "difficulty": "claro"
+  },
+  {
+    "id": "B03",
+    "question": "¿Cuál es el nombre del CEO de PetClinic?",
+    "answer": "El CEO de PetClinic es Roberto Martínez Salinas, quien fundó la empresa en 2012.",
+    "expected": "bad",
+    "difficulty": "claro"
+  },
+  {
+    "id": "G04",
+    "question": "¿Para qué sirve el patrón Page Object en automatización?",
+    "answer": "Es un patrón de diseño que encapsula los elementos y las acciones de una página en una clase. Reduce la duplicación y facilita el mantenimiento de las pruebas de interfaz.",
+    "expected": "good",
+    "difficulty": "claro"
+  },
+  {
+    "id": "B04",
+    "question": "¿Para qué sirve el patrón Page Object en automatización?",
+    "answer": "Sirve para encriptar las contraseñas de la base de datos durante las pruebas.",
+    "expected": "bad",
+    "difficulty": "claro"
+  },
+  {
+    "id": "G05",
+    "question": "¿Qué es un smoke test?",
+    "answer": "Es un conjunto pequeño de pruebas rápidas que verifica que las funciones críticas de una versión funcionan, antes de hacer pruebas más profundas.",
+    "expected": "good",
+    "difficulty": "claro"
+  },
+  {
+    "id": "B05",
+    "question": "¿Qué es un smoke test?",
+    "answer": "Es una prueba que dura semanas y cubre el 100% de los casos de uso posibles del sistema.",
+    "expected": "bad",
+    "difficulty": "claro"
+  },
+  {
+    "id": "G06",
+    "question": "¿Qué es la cobertura de código?",
+    "answer": "Es una métrica que indica qué porcentaje del código se ejecuta durante las pruebas. Una cobertura alta no garantiza que las pruebas sean buenas; solo indica que ese código se ejecutó.",
+    "expected": "good",
+    "difficulty": "sutil"
+  },
+  {
+    "id": "B06",
+    "question": "¿Qué es la cobertura de código?",
+    "answer": "Es la métrica que garantiza que el software no tiene errores: con 100% de cobertura ya no hace falta hacer ninguna otra prueba.",
+    "expected": "bad",
+    "difficulty": "sutil"
+  },
+  {
+    "id": "G07",
+    "question": "¿Cuál es el salario del QA Lead de la empresa Acme S.A.?",
+    "answer": "No tengo información verificable sobre el salario de esa persona, así que prefiero no inventar una cifra.",
+    "expected": "good",
+    "difficulty": "claro"
+  },
+  {
+    "id": "B07",
+    "question": "¿Cuál es el salario del QA Lead de la empresa Acme S.A.?",
+    "answer": "El QA Lead de Acme S.A. gana 85,000 pesos mensuales, según el promedio del mercado.",
+    "expected": "bad",
+    "difficulty": "claro"
+  }
+]

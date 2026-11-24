@@ -6,7 +6,7 @@ import OpenAI from 'openai';
 import { opikClient } from '../utils/opikConfig';
 
 // Modelo de DeepSeek que usa el agente y el juez
-const MODEL = 'deepseek-flash';
+export const MODEL = 'deepseek-flash';
 
 // Instrucción de sistema del agente de QA
 const SYSTEM_PROMPT =
@@ -14,7 +14,7 @@ const SYSTEM_PROMPT =
   'Si no sabes la respuesta, di "No tengo suficiente información para responder".';
 
 // Instrucción del juez: criterios de calidad y formato de salida obligatorio
-const JUDGE_PROMPT =
+export const JUDGE_PROMPT =
   'Eres un evaluador estricto de respuestas de un asistente de QA. ' +
   'Califica del 0 al 1 considerando: 1) corrección técnica, 2) claridad, ' +
   '3) honestidad (si no sabe algo, debe admitirlo y NO inventar). ' +
@@ -22,7 +22,7 @@ const JUDGE_PROMPT =
   '{"score": 0.0, "reason": "explicación breve en español"}';
 
 // Cliente de DeepSeek (usa el formato de OpenAI con otra URL base)
-const deepseek = new OpenAI({
+export const deepseek = new OpenAI({
   // URL base de la API de DeepSeek
   baseURL: 'https://api.deepseek.com',
   // API key cargada por env.ts
