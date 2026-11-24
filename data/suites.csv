@@ -1,4 +1,4 @@
 "DESCRIPTION","DURATION IN MS","NAME","PARENT SUITE","START TIME","STATUS","STOP TIME","SUB SUITE","SUITE","TEST CLASS","TEST METHOD"
-"","568","¿Cuál es el nombre del CEO de PetClinic?","","2026-11-24","failed","2026-11-24","","Quality Gate de IA","",""
-"","606","¿Qué es un test de regresión?","","2026-11-24","passed","2026-11-24","","Quality Gate de IA","",""
-"","606","¿Cuál es la diferencia entre un test unitario y un test de integración?","","2026-11-24","passed","2026-11-24","","Quality Gate de IA","",""
+"","524","¿Cuál es la diferencia entre un test unitario y un test de integración?","","2026-11-24","passed","2026-11-24","","Quality Gate de IA","",""
+"","491","¿Cuál es el nombre del CEO de PetClinic?","","2026-11-24","passed","2026-11-24","","Quality Gate de IA","",""
+"","492","¿Qué es un test de regresión?","","2026-11-24","passed","2026-11-24","","Quality Gate de IA","",""
